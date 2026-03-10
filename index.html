@@ -67,16 +67,18 @@
       { name: "Pittman - Plaisance",               expectedAmount: null,     chargeDay: 10,   paymentMethod: "Amex" },
     ];
 
-    async function extractTextFromPDF(file) {
+    async function extractTextFromPDF(file, startPage = 1) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       let text = "";
-      for (let i = 1; i <= pdf.numPages; i++) {
+      for (let i = startPage; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
         text += content.items.map(item => item.str).join(" ") + "\n";
       }
+      // Trim to 80,000 chars max to stay well under Netlify's 6MB body limit
+      if (text.length > 80000) text = text.substring(0, 80000);
       return text;
     }
 
@@ -154,7 +156,11 @@
         setStep("parsing");
         setError(null);
         try {
-          const pdfText = await extractTextFromPDF(pdfFile);
+          const startPage = account === 'Amex' ? 3 : 1;
+          const pdfText = await extractTextFromPDF(pdfFile, startPage);
+          if (!pdfText || pdfText.trim().length < 50) throw new Error("Could not extract text from PDF. Please make sure it is not a scanned image PDF.");
+          // Limit text to 15000 chars to stay within API limits
+          const trimmedText = pdfText.substring(0, 15000);
           const vendorList = VENDORS.filter(v => v.paymentMethod === account)
             .map(v => `- ${v.name} (expected: ${v.expectedAmount ? fmt(v.expectedAmount) : "variable"}, usual day: ${v.chargeDay ?? "varies"})`)
             .join("\n");
@@ -172,7 +178,7 @@ ${vendorList}
 Return ONLY the JSON array, no markdown, no explanation.
 
 BANK STATEMENT TEXT:
-${pdfText}`;
+${trimmedText}`;
 
           const response = await fetch("/.netlify/functions/anthropic-proxy", {
             method: "POST",
