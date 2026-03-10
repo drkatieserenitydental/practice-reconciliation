@@ -118,7 +118,7 @@
     }
 
     function App() {
-      const [step, setStep] = useState("upload");
+      const [step, setStep] = useState("upload"); // upload | parsing | review | sheet | email
       const [file, setFile] = useState(null);
       const [month, setMonth] = useState("Jan '26");
       const [account, setAccount] = useState("BoA");
@@ -131,6 +131,11 @@
       const [gmailStatus, setGmailStatus] = useState(null);
       const [emailCopied, setEmailCopied] = useState(false);
       const [dragOver, setDragOver] = useState(false);
+
+      // Multi-statement: store results from both accounts
+      const [boaResults, setBoaResults] = useState(null);   // {matches, unmatched, missing}
+      const [amexResults, setAmexResults] = useState(null); // {matches, unmatched, missing}
+      const [completedAccounts, setCompletedAccounts] = useState([]); // ["BoA", "Amex"]
 
       function signInWithGoogle() {
         if (!window.google) { setError("Google sign-in not loaded yet — please wait a moment and try again."); return; }
@@ -222,6 +227,10 @@ ${pdfText}`;
         setMatches(matched);
         setUnmatched(unmatched);
         setMissing(missing);
+        // Save results per account for combined email
+        const results = { matches: matched, unmatched, missing, account };
+        if (account === "BoA") setBoaResults(results);
+        else setAmexResults(results);
       }
 
       async function writeToSheets() {
@@ -277,37 +286,64 @@ ${pdfText}`;
         }
       }
 
+      function buildAccountSection(label, results) {
+        if (!results) return [];
+        const { matches: m, unmatched: u, missing: miss } = results;
+        const discrepant = m.filter(x => x.discrepancies.length > 0);
+        return [
+          "",
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          `  ${label}`,
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          "",
+          "✅  CONFIRMED PAYMENTS",
+          "───────────────────────────────────────────────",
+          ...m.filter(x => x.discrepancies.length === 0).map(
+            x => `  ${x.vendorMatch.padEnd(38)} ${fmt(x.amount).padStart(12)}   ${x.date}`
+          ),
+          ...(discrepant.length > 0 ? [
+            "",
+            "⚠️   DISCREPANCIES",
+            "───────────────────────────────────────────────",
+            ...discrepant.map(x => `  ${x.vendorMatch}\n    → ${x.discrepancies.join("; ")}`),
+          ] : []),
+          ...(miss.length > 0 ? [
+            "",
+            "❌  MISSING CHARGES",
+            "───────────────────────────────────────────────",
+            ...miss.map(v => `  ${v.name.padEnd(38)} ${fmt(v.expectedAmount).padStart(12)}`),
+          ] : []),
+          ...(u.length > 0 ? [
+            "",
+            "🔍  UNRECOGNIZED TRANSACTIONS",
+            "───────────────────────────────────────────────",
+            ...u.map(t => `  ${t.description.substring(0, 38).padEnd(38)} ${fmt(t.amount).padStart(12)}   ${t.date}`),
+          ] : []),
+        ];
+      }
+
       function buildEmail() {
-        const discrepant = matches.filter(m => m.discrepancies.length > 0);
+        const allMatches = [
+          ...(boaResults ? boaResults.matches : []),
+          ...(amexResults ? amexResults.matches : []),
+        ];
+        const totalConfirmed = allMatches.filter(m => m.discrepancies.length === 0)
+          .reduce((sum, m) => sum + m.amount, 0);
+        const totalDiscrepancies = allMatches.filter(m => m.discrepancies.length > 0).length;
+        const totalMissing = [
+          ...(boaResults ? boaResults.missing : []),
+          ...(amexResults ? amexResults.missing : []),
+        ].length;
+
         const lines = [
           `MONTHLY RECONCILIATION SUMMARY — ${month}`,
-          `Account: ${account} Expense`,
           `Generated: ${new Date().toLocaleDateString()}`,
           "",
-          "═══════════════════════════════════════════════",
-          "✅  CONFIRMED PAYMENTS",
-          "═══════════════════════════════════════════════",
-          ...matches.filter(m => m.discrepancies.length === 0).map(
-            m => `  ${m.vendorMatch.padEnd(38)} ${fmt(m.amount).padStart(12)}   ${m.date}`
-          ),
-          "",
-          ...(discrepant.length > 0 ? [
-            "⚠️   DISCREPANCIES",
-            "═══════════════════════════════════════════════",
-            ...discrepant.map(m => `  ${m.vendorMatch}\n    → ${m.discrepancies.join("; ")}`),
-            "",
-          ] : []),
-          ...(missing.length > 0 ? [
-            "❌  MISSING CHARGES (expected but not found)",
-            "═══════════════════════════════════════════════",
-            ...missing.map(v => `  ${v.name.padEnd(38)} ${fmt(v.expectedAmount).padStart(12)}`),
-            "",
-          ] : []),
-          ...(unmatched.length > 0 ? [
-            "🔍  UNRECOGNIZED TRANSACTIONS",
-            "═══════════════════════════════════════════════",
-            ...unmatched.map(t => `  ${t.description.substring(0, 38).padEnd(38)} ${fmt(t.amount).padStart(12)}   ${t.date}`),
-          ] : []),
+          `  Total Confirmed Payments:  ${fmt(totalConfirmed)}`,
+          `  Discrepancies:             ${totalDiscrepancies}`,
+          `  Missing Charges:           ${totalMissing}`,
+          ...buildAccountSection("BANK OF AMERICA EXPENSE", boaResults),
+          ...buildAccountSection("AMERICAN EXPRESS", amexResults),
         ];
         return lines.join("\n");
       }
@@ -490,8 +526,25 @@ ${pdfText}`;
                     {sheetStatus === "loading" && <StatusMsg color="#c9b97a">Writing to Google Sheets…</StatusMsg>}
                     {sheetStatus === "success" && (
                       <div>
-                        <StatusMsg color="#4a7c59">✅ Sheet updated successfully!</StatusMsg>
-                        <button onClick={() => setStep("email")} style={{ ...btnStyle("#4a7c59", "#fff"), marginTop: "12px" }}>Generate & Send Summary Email →</button>
+                        <StatusMsg color="#4a7c59">✅ {account} sheet updated successfully!</StatusMsg>
+                        <div style={{ display: "flex", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
+                          {account === "BoA" && !amexResults && (
+                            <button onClick={() => {
+                              setAccount("Amex");
+                              setFile(null);
+                              setMatches([]);
+                              setUnmatched([]);
+                              setMissing([]);
+                              setSheetStatus(null);
+                              setStep("upload");
+                            }} style={btnStyle("#4a6a8a", "#fff")}>
+                              + Add Amex Statement →
+                            </button>
+                          )}
+                          <button onClick={() => setStep("email")} style={btnStyle("#4a7c59", "#fff")}>
+                            {amexResults || account === "Amex" ? "Generate & Send Summary Email →" : "Skip Amex → Generate Email"}
+                          </button>
+                        </div>
                       </div>
                     )}
                     {sheetStatus?.startsWith("error") && <StatusMsg color="#c94a4a">{sheetStatus}</StatusMsg>}
