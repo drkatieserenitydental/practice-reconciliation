@@ -135,6 +135,7 @@ function App() {
   const [gmailStatus, setGmailStatus] = useState(null);
   const [emailCopied, setEmailCopied] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [sheetVendors, setSheetVendors] = useState(null); // {name, expectedAmount} from live sheet
   const [boaResults, setBoaResults] = useState(null);
   const [amexResults, setAmexResults] = useState(null);
 
@@ -143,9 +144,26 @@ function App() {
     window.google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES,
-      callback: (r) => {
+      callback: async (r) => {
         if (r.error) { setError("Sign-in failed: " + r.error); return; }
         setSheetsToken(r.access_token);
+        // Load expected amounts from sheet columns A and H
+        try {
+          const res = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:H100`,
+            { headers: { "Authorization": `Bearer ${r.access_token}` } }
+          );
+          const json = await res.json();
+          if (!json.error && json.values) {
+            const vendors = json.values.slice(1).map(row => ({
+              name: (row[0] || "").trim(),
+              expectedAmount: row[7] ? parseFloat(row[7].toString().replace(/[$,]/g, "")) || null : null,
+            })).filter(v => v.name);
+            setSheetVendors(vendors);
+          }
+        } catch(e) {
+          console.warn("Could not load sheet vendors:", e);
+        }
       },
     }).requestAccessToken();
   }
@@ -204,9 +222,12 @@ function App() {
       if (tx.amount <= 0) continue;
       if (tx.vendorMatch && tx.matchConfidence !== "none") {
         const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
+        // Use live sheet amount if available, otherwise fall back to hardcoded
+        const liveVendor = sheetVendors ? sheetVendors.find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
+        const expectedAmt = liveVendor?.expectedAmount ?? vendor?.expectedAmount;
         const discrepancies = [];
-        if (vendor?.expectedAmount && Math.abs(tx.amount - vendor.expectedAmount) > 0.50) {
-          discrepancies.push(`Expected ${fmt(vendor.expectedAmount)}, charged ${fmt(tx.amount)}`);
+        if (expectedAmt && Math.abs(tx.amount - expectedAmt) > 0.50) {
+          discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(tx.amount)}`);
         }
         matched.push({ ...tx, vendor, discrepancies });
         matchedNames.add(tx.vendorMatch);
@@ -214,7 +235,12 @@ function App() {
         unmatched.push(tx);
       }
     }
-    const miss = accountVendors.filter(v => !matchedNames.has(v.name) && v.expectedAmount);
+    const miss = accountVendors.filter(v => {
+      if (matchedNames.has(v.name)) return false;
+      const liveV = sheetVendors ? sheetVendors.find(s => s.name.toLowerCase() === v.name.toLowerCase()) : null;
+      const amt = liveV?.expectedAmount ?? v.expectedAmount;
+      return amt != null;
+    });
     setMatches(matched);
     setUnmatched(unmatched);
     setMissing(miss);
