@@ -1,5 +1,3 @@
 [functions]
   directory = "netlify/functions"
-
-[functions."anthropic-proxy"]
-  timeout = 120
+  node_bundler = "esbuild"
