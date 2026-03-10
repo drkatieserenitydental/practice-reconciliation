@@ -13,631 +13,510 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0f0f0f; color: #e8e3d5; font-family: Georgia, 'Times New Roman', serif; }
     select, input, button { font-family: Georgia, serif; }
-    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #1a1a1a; } ::-webkit-scrollbar-thumb { background: #333; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1a1a1a; }
+    ::-webkit-scrollbar-thumb { background: #333; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useCallback } = React;
 
-  <script type="text/babel">
-    const { useState, useCallback, useEffect } = React;
+const GOOGLE_CLIENT_ID = "560520441116-fc8a98udbchoqq253ifdk6607p5ss4bm.apps.googleusercontent.com";
+const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/gmail.send";
+const SHEET_ID = "141fQX9yQxBToRS-yZHuDzOjD3KKCtRAyObvewDE-mqs";
+const MONTH_LABELS = ["Jan '26","Feb '26","Mar '26","Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26"];
 
-    const GOOGLE_CLIENT_ID = "560520441116-fc8a98udbchoqq253ifdk6607p5ss4bm.apps.googleusercontent.com";
-    const ANTHROPIC_API_KEY = ""; // Set at runtime via UI // sk-ant-...
-    const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/gmail.send";
-    const SHEET_ID = "141fQX9yQxBToRS-yZHuDzOjD3KKCtRAyObvewDE-mqs";
-    const MONTH_LABELS = ["Jan '26","Feb '26","Mar '26","Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26"];
+const VENDORS = [
+  { name: "EverBank Loan",                  expectedAmount: 689.32,  chargeDay: 1,    method: "BoA" },
+  { name: "WealthFD",                        expectedAmount: 1000.00, chargeDay: 1,    method: "BoA" },
+  { name: "Protective Life Insurance",       expectedAmount: 7.70,    chargeDay: null, method: "BoA" },
+  { name: "Hanover",                         expectedAmount: 250.06,  chargeDay: 11,   method: "BoA" },
+  { name: "Amex CC",                         expectedAmount: null,    chargeDay: 13,   method: "BoA" },
+  { name: "Practice Loan (Bank of America)", expectedAmount: 8117.39, chargeDay: 21,   method: "BoA" },
+  { name: "Rent",                            expectedAmount: 7824.34, chargeDay: 21,   method: "BoA" },
+  { name: "Business Disability (Principal)", expectedAmount: 127.31,  chargeDay: 24,   method: "BoA" },
+  { name: "Dr. Benson Loan",                expectedAmount: 1889.41, chargeDay: 30,   method: "BoA" },
+  { name: "Spectrum Killian - Benson",       expectedAmount: null,    chargeDay: 15,   method: "BoA" },
+  { name: "Spectrum Killian - Plaisance",    expectedAmount: null,    chargeDay: 15,   method: "BoA" },
+  { name: "Carter Dental Solutions",         expectedAmount: 1050.00, chargeDay: 1,    method: "Amex" },
+  { name: "Google Business Benson",          expectedAmount: null,    chargeDay: 1,    method: "Amex" },
+  { name: "Google Business Serenity",        expectedAmount: null,    chargeDay: 1,    method: "Amex" },
+  { name: "Dental Growth Solutions",         expectedAmount: 345.48,  chargeDay: 17,   method: "Amex" },
+  { name: "Revenue Well",                    expectedAmount: 793.58,  chargeDay: 1,    method: "Amex" },
+  { name: "Cloud",                           expectedAmount: 117.00,  chargeDay: 2,    method: "Amex" },
+  { name: "Scribe",                          expectedAmount: 28.00,   chargeDay: 4,    method: "Amex" },
+  { name: "Chat GPT",                        expectedAmount: 20.00,   chargeDay: 5,    method: "Amex" },
+  { name: "Profitable PPOs",                 expectedAmount: 1825.00, chargeDay: 5,    method: "Amex" },
+  { name: "Eagle Soft Patterson",            expectedAmount: 233.10,  chargeDay: 11,   method: "Amex" },
+  { name: "Eagle Soft Vyne",                 expectedAmount: 129.00,  chargeDay: 11,   method: "Amex" },
+  { name: "Extra Space Storage",             expectedAmount: null,    chargeDay: 11,   method: "Amex" },
+  { name: "Sly Broadcast",                   expectedAmount: 8.00,    chargeDay: 12,   method: "Amex" },
+  { name: "Optima",                          expectedAmount: 79.00,   chargeDay: 15,   method: "Amex" },
+  { name: "IP Quest",                        expectedAmount: 440.00,  chargeDay: 16,   method: "Amex" },
+  { name: "Florida Probe",                   expectedAmount: 99.00,   chargeDay: 23,   method: "Amex" },
+  { name: "Comcast Business",                expectedAmount: 359.38,  chargeDay: 25,   method: "Amex" },
+  { name: "Spotify",                         expectedAmount: 19.99,   chargeDay: 25,   method: "Amex" },
+  { name: "Dexis Complete",                  expectedAmount: 258.00,  chargeDay: 25,   method: "Amex" },
+  { name: "NexAir (Rental)",                 expectedAmount: null,    chargeDay: 31,   method: "Amex" },
+  { name: "NexAir Fill",                     expectedAmount: null,    chargeDay: null, method: "Amex" },
+  { name: "Netflix",                         expectedAmount: 17.99,   chargeDay: 30,   method: "Amex" },
+  { name: "Glidewell",                       expectedAmount: null,    chargeDay: 22,   method: "Amex" },
+  { name: "Quench",                          expectedAmount: null,    chargeDay: 1,    method: "Amex" },
+  { name: "Pittman - Benson",                expectedAmount: null,    chargeDay: 10,   method: "Amex" },
+  { name: "Pittman - Plaisance",             expectedAmount: null,    chargeDay: 10,   method: "Amex" },
+];
 
-    const VENDORS = [
-      { name: "EverBank Loan",                    expectedAmount: 689.32,   chargeDay: 1,    paymentMethod: "BoA" },
-      { name: "WealthFD",                          expectedAmount: 1000.00,  chargeDay: 1,    paymentMethod: "BoA" },
-      { name: "Protective Life Insurance",         expectedAmount: 7.70,     chargeDay: null, paymentMethod: "BoA" },
-      { name: "Hanover",                           expectedAmount: 250.06,   chargeDay: 11,   paymentMethod: "BoA" },
-      { name: "Amex CC",                           expectedAmount: null,     chargeDay: 13,   paymentMethod: "BoA" },
-      { name: "Practice Loan (Bank of America)",   expectedAmount: 8117.39,  chargeDay: 21,   paymentMethod: "BoA" },
-      { name: "Rent",                              expectedAmount: 7824.34,  chargeDay: 21,   paymentMethod: "BoA" },
-      { name: "Business Disability (Principal)",   expectedAmount: 127.31,   chargeDay: 24,   paymentMethod: "BoA" },
-      { name: "Dr. Benson Loan",                  expectedAmount: 1889.41,  chargeDay: 30,   paymentMethod: "BoA" },
-      { name: "Spectrum Killian - Benson",         expectedAmount: null,     chargeDay: 15,   paymentMethod: "BoA" },
-      { name: "Spectrum Killian - Plaisance",      expectedAmount: null,     chargeDay: 15,   paymentMethod: "BoA" },
-      { name: "Carter Dental Solutions",           expectedAmount: 1050.00,  chargeDay: 1,    paymentMethod: "Amex" },
-      { name: "Google Business Benson",            expectedAmount: null,     chargeDay: 1,    paymentMethod: "Amex" },
-      { name: "Google Business Serenity",          expectedAmount: null,     chargeDay: 1,    paymentMethod: "Amex" },
-      { name: "Dental Growth Solutions",           expectedAmount: 345.48,   chargeDay: 17,   paymentMethod: "Amex" },
-      { name: "Revenue Well",                      expectedAmount: 793.58,   chargeDay: 1,    paymentMethod: "Amex" },
-      { name: "Cloud",                             expectedAmount: 117.00,   chargeDay: 2,    paymentMethod: "Amex" },
-      { name: "Scribe",                            expectedAmount: 28.00,    chargeDay: 4,    paymentMethod: "Amex" },
-      { name: "Chat GPT",                          expectedAmount: 20.00,    chargeDay: 5,    paymentMethod: "Amex" },
-      { name: "Profitable PPOs",                   expectedAmount: 1825.00,  chargeDay: 5,    paymentMethod: "Amex" },
-      { name: "Eagle Soft Patterson",              expectedAmount: 233.10,   chargeDay: 11,   paymentMethod: "Amex" },
-      { name: "Eagle Soft Vyne",                   expectedAmount: 129.00,   chargeDay: 11,   paymentMethod: "Amex" },
-      { name: "Extra Space Storage",               expectedAmount: null,     chargeDay: 11,   paymentMethod: "Amex" },
-      { name: "Sly Broadcast",                     expectedAmount: 8.00,     chargeDay: 12,   paymentMethod: "Amex" },
-      { name: "Optima",                            expectedAmount: 79.00,    chargeDay: 15,   paymentMethod: "Amex" },
-      { name: "IP Quest",                          expectedAmount: 440.00,   chargeDay: 16,   paymentMethod: "Amex" },
-      { name: "Florida Probe",                     expectedAmount: 99.00,    chargeDay: 23,   paymentMethod: "Amex" },
-      { name: "Comcast Business",                  expectedAmount: 359.38,   chargeDay: 25,   paymentMethod: "Amex" },
-      { name: "Spotify",                           expectedAmount: 19.99,    chargeDay: 25,   paymentMethod: "Amex" },
-      { name: "Dexis Complete",                    expectedAmount: 258.00,   chargeDay: 25,   paymentMethod: "Amex" },
-      { name: "NexAir (Rental)",                   expectedAmount: null,     chargeDay: 31,   paymentMethod: "Amex" },
-      { name: "NexAir Fill",                       expectedAmount: null,     chargeDay: null, paymentMethod: "Amex" },
-      { name: "Netflix",                           expectedAmount: 17.99,    chargeDay: 30,   paymentMethod: "Amex" },
-      { name: "Glidewell",                         expectedAmount: null,     chargeDay: 22,   paymentMethod: "Amex" },
-      { name: "Quench",                            expectedAmount: null,     chargeDay: 1,    paymentMethod: "Amex" },
-      { name: "Pittman - Benson",                  expectedAmount: null,     chargeDay: 10,   paymentMethod: "Amex" },
-      { name: "Pittman - Plaisance",               expectedAmount: null,     chargeDay: 10,   paymentMethod: "Amex" },
+async function extractTextFromPDF(file, startPage = 1) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let text = "";
+  for (let i = startPage; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(item => item.str).join(" ") + "\n";
+  }
+  if (text.length > 80000) text = text.substring(0, 80000);
+  return text;
+}
+
+function fmt(n) {
+  if (n == null) return "—";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+}
+
+function B(bg, color) {
+  return { background: bg, color, border: "none", borderRadius: "4px", padding: "12px 24px", fontSize: "13px", letterSpacing: "1px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic" };
+}
+
+function Msg({ color, children }) {
+  return <div style={{ background: "#1a1a1a", border: `1px solid ${color}44`, borderRadius: "4px", padding: "12px 16px", color, fontSize: "13px" }}>{children}</div>;
+}
+
+function Section({ title, color, children }) {
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <div style={{ fontSize: "12px", color, letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${color}33` }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, amount, date, note, noteColor, warn }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #1e1e1e", background: warn ? "#1a1808" : "transparent" }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: "14px", color: "#d8d0c0" }}>{label}</div>
+        {note && <div style={{ fontSize: "11px", color: noteColor, marginTop: "2px" }}>{note}</div>}
+      </div>
+      <div style={{ textAlign: "right", marginLeft: "16px" }}>
+        <div style={{ fontSize: "14px", color: "#c9b97a", fontStyle: "italic" }}>{amount}</div>
+        <div style={{ fontSize: "11px", color: "#555", marginTop: "1px" }}>{date}</div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [step, setStep] = useState("upload");
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeySet, setApiKeySet] = useState(false);
+  const [file, setFile] = useState(null);
+  const [month, setMonth] = useState("Jan '26");
+  const [account, setAccount] = useState("BoA");
+  const [matches, setMatches] = useState([]);
+  const [unmatched, setUnmatched] = useState([]);
+  const [missing, setMissing] = useState([]);
+  const [error, setError] = useState(null);
+  const [sheetsToken, setSheetsToken] = useState("");
+  const [sheetStatus, setSheetStatus] = useState(null);
+  const [gmailStatus, setGmailStatus] = useState(null);
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [boaResults, setBoaResults] = useState(null);
+  const [amexResults, setAmexResults] = useState(null);
+
+  function signInWithGoogle() {
+    if (!window.google) { setError("Google sign-in not loaded yet."); return; }
+    window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: SCOPES,
+      callback: (r) => {
+        if (r.error) { setError("Sign-in failed: " + r.error); return; }
+        setSheetsToken(r.access_token);
+      },
+    }).requestAccessToken();
+  }
+
+  async function parsePDF(pdfFile) {
+    setStep("parsing");
+    setError(null);
+    try {
+      const startPage = account === "Amex" ? 3 : 1;
+      const pdfText = await extractTextFromPDF(pdfFile, startPage);
+      if (!pdfText || pdfText.trim().length < 50) throw new Error("Could not extract text from PDF.");
+
+      const vendorList = VENDORS.filter(v => v.method === account)
+        .map(v => `${v.name}|expected:${v.expectedAmount ? fmt(v.expectedAmount) : "variable"}`)
+        .join(", ");
+
+      const prompt = `Extract ALL transactions from this bank statement as a JSON array. Each item: {"date":"YYYY-MM-DD","description":"string","amount":number,"vendorMatch":"vendor name or null","matchConfidence":"high|medium|low|none"}. Amount positive=charge, negative=credit. Match vendorMatch ONLY to: ${vendorList}. Return ONLY the JSON array.\n\n${pdfText}`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 8000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      if (!data.content) throw new Error("No content in response");
+
+      const raw = data.content.map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
+      const start = raw.indexOf("[");
+      const end = raw.lastIndexOf("]");
+      if (start === -1 || end === -1) throw new Error("No JSON array in response: " + raw.substring(0, 200));
+      const parsed = JSON.parse(raw.substring(start, end + 1));
+      reconcile(parsed);
+      setStep("review");
+    } catch (e) {
+      setError("Failed to parse statement: " + e.message);
+      setStep("upload");
+    }
+  }
+
+  function reconcile(txns) {
+    const accountVendors = VENDORS.filter(v => v.method === account);
+    const matched = [], unmatched = [];
+    const matchedNames = new Set();
+    for (const tx of txns) {
+      if (tx.amount <= 0) continue;
+      if (tx.vendorMatch && tx.matchConfidence !== "none") {
+        const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
+        const discrepancies = [];
+        if (vendor?.expectedAmount && Math.abs(tx.amount - vendor.expectedAmount) > 0.50) {
+          discrepancies.push(`Expected ${fmt(vendor.expectedAmount)}, charged ${fmt(tx.amount)}`);
+        }
+        matched.push({ ...tx, vendor, discrepancies });
+        matchedNames.add(tx.vendorMatch);
+      } else {
+        unmatched.push(tx);
+      }
+    }
+    const miss = accountVendors.filter(v => !matchedNames.has(v.name) && v.expectedAmount);
+    setMatches(matched);
+    setUnmatched(unmatched);
+    setMissing(miss);
+    const results = { matches: matched, unmatched, missing: miss, account };
+    if (account === "BoA") setBoaResults(results);
+    else setAmexResults(results);
+  }
+
+  async function writeToSheets() {
+    setSheetStatus("loading");
+    const monthIdx = MONTH_LABELS.indexOf(month);
+    const amountColIdx = 10 + monthIdx * 2;
+    const dateColIdx = 11 + monthIdx * 2;
+    const col = (i) => i < 26 ? String.fromCharCode(65 + i) : "A" + String.fromCharCode(65 + i - 26);
+    try {
+      const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:A100`, {
+        headers: { "Authorization": `Bearer ${sheetsToken}` }
+      });
+      const readJson = await readRes.json();
+      if (readJson.error) throw new Error("Could not read sheet: " + readJson.error.message);
+      const sheetRows = (readJson.values || []).map((row, idx) => ({ name: (row[0] || "").trim(), row: idx + 1 }));
+      const updates = [];
+      for (const m of matches) {
+        const found = sheetRows.find(v => v.name.toLowerCase() === m.vendorMatch.toLowerCase());
+        if (!found) continue;
+        updates.push({ range: `${col(amountColIdx)}${found.row}`, values: [[m.amount]] });
+        updates.push({ range: `${col(dateColIdx)}${found.row}`, values: [[m.date]] });
+      }
+      if (updates.length === 0) throw new Error("No matching vendors found in sheet");
+      const writeRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updates })
+      });
+      const writeJson = await writeRes.json();
+      if (writeJson.error) throw new Error(writeJson.error.message);
+      setSheetStatus("success");
+    } catch (e) {
+      setSheetStatus("error: " + e.message);
+    }
+  }
+
+  function buildSection(label, results) {
+    if (!results) return [];
+    const { matches: m, unmatched: u, missing: miss } = results;
+    const disc = m.filter(x => x.discrepancies.length > 0);
+    return [
+      "", `━━━━ ${label} ━━━━`, "",
+      "✅ CONFIRMED",
+      ...m.filter(x => x.discrepancies.length === 0).map(x => `  ${x.vendorMatch.padEnd(35)} ${fmt(x.amount).padStart(12)}   ${x.date}`),
+      ...(disc.length > 0 ? ["", "⚠️  DISCREPANCIES", ...disc.map(x => `  ${x.vendorMatch}: ${x.discrepancies.join("; ")}`)] : []),
+      ...(miss.length > 0 ? ["", "❌ MISSING", ...miss.map(v => `  ${v.name.padEnd(35)} ${fmt(v.expectedAmount).padStart(12)}`)] : []),
+      ...(u.length > 0 ? ["", "🔍 UNRECOGNIZED", ...u.map(t => `  ${t.description.substring(0, 35).padEnd(35)} ${fmt(t.amount).padStart(12)}   ${t.date}`)] : []),
     ];
+  }
 
-    async function extractTextFromPDF(file, startPage = 1) {
-      try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-        let text = "";
-        const endPage = Math.min(pdf.numPages, startPage + 20); // max 20 pages
-        for (let i = startPage; i <= endPage; i++) {
-          try {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            const pageText = content.items.map(item => item.str || "").join(" ");
-            text += pageText + "\n";
-          } catch(pageErr) {
-            console.warn("Could not read page " + i, pageErr);
-          }
-        }
-        if (!text.trim()) throw new Error("No text could be extracted from this PDF");
-        // Trim to 60,000 chars max
-        if (text.length > 60000) text = text.substring(0, 60000);
-        return text;
-      } catch(e) {
-        throw new Error("PDF extraction failed: " + e.message);
-      }
+  function buildEmail() {
+    const all = [...(boaResults?.matches || []), ...(amexResults?.matches || [])];
+    const total = all.filter(m => m.discrepancies.length === 0).reduce((s, m) => s + m.amount, 0);
+    return [
+      `RECONCILIATION SUMMARY — ${month}`,
+      `Generated: ${new Date().toLocaleDateString()}`,
+      `Total Confirmed: ${fmt(total)}`,
+      ...buildSection("BANK OF AMERICA", boaResults),
+      ...buildSection("AMERICAN EXPRESS", amexResults),
+    ].join("\n");
+  }
+
+  async function sendGmail() {
+    setGmailStatus("loading");
+    const body = buildEmail();
+    const raw = [`To: me`, `Subject: Reconciliation ${month}`, `Content-Type: text/plain; charset=utf-8`, ``, body].join("\n");
+    const encoded = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    try {
+      const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: encoded })
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error.message);
+      setGmailStatus("success");
+    } catch (e) {
+      setGmailStatus("error: " + e.message);
     }
+  }
 
-    function fmt(n) {
-      if (n == null) return "—";
-      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-    }
+  function copyEmail() {
+    navigator.clipboard.writeText(buildEmail());
+    setEmailCopied(true);
+    setTimeout(() => setEmailCopied(false), 2000);
+  }
 
-    function btnStyle(bg, color, extra = {}) {
-      return { background: bg, color, border: "none", borderRadius: "4px", padding: "12px 24px", fontSize: "13px", letterSpacing: "1px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic", transition: "all 0.2s", ...extra };
-    }
+  const onDrop = useCallback((e) => {
+    e.preventDefault(); setDragOver(false);
+    const f = e.dataTransfer.files[0];
+    if (f?.type === "application/pdf") setFile(f);
+  }, []);
 
-    function StatusMsg({ color, children }) {
-      return <div style={{ background: "#1a1a1a", border: `1px solid ${color}44`, borderRadius: "4px", padding: "12px 16px", color, fontSize: "13px" }}>{children}</div>;
-    }
+  const discrepantCount = matches.filter(m => m.discrepancies.length > 0).length;
+  const sel = { width: "100%", background: "#1a1a1a", border: "1px solid #333", color: "#e8e3d5", padding: "10px 14px", fontSize: "14px", borderRadius: "4px" };
+  const label = { fontSize: "11px", letterSpacing: "2px", color: "#888", textTransform: "uppercase", display: "block", marginBottom: "8px" };
 
-    function Section({ title, color, children }) {
-      return (
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{ fontSize: "12px", color, letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${color}33` }}>{title}</div>
-          {children}
-        </div>
-      );
-    }
+  return (
+    <div style={{ minHeight: "100vh", background: "#0f0f0f" }}>
+      <div style={{ borderBottom: "1px solid #2a2a2a", padding: "28px 40px 20px", display: "flex", alignItems: "baseline", gap: "16px" }}>
+        <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#666", textTransform: "uppercase" }}>Practice Finance</div>
+        <div style={{ fontSize: "22px", color: "#c9b97a", fontStyle: "italic" }}>Monthly Reconciliation</div>
+      </div>
 
-    function Row({ label, amount, date, note, noteColor, warn }) {
-      return (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #1e1e1e", background: warn ? "#1a1808" : "transparent" }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "14px", color: "#d8d0c0" }}>{label}</div>
-            {note && <div style={{ fontSize: "11px", color: noteColor, marginTop: "2px" }}>{note}</div>}
+      <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px" }}>
+
+        {/* API KEY */}
+        {!apiKeySet && (
+          <div style={{ maxWidth: "500px", margin: "60px auto", textAlign: "center" }}>
+            <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Setup</div>
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>Enter Your API Key</div>
+            <div style={{ color: "#666", fontSize: "14px", marginBottom: "32px" }}>Stays in your browser only — never stored anywhere</div>
+            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+              placeholder="sk-ant-..."
+              style={{ width: "100%", background: "#1a1a1a", border: "1px solid #333", color: "#e8e3d5", padding: "12px 14px", fontSize: "13px", borderRadius: "4px", fontFamily: "monospace", marginBottom: "16px", boxSizing: "border-box" }}
+            />
+            <button onClick={() => apiKey.startsWith("sk-ant-") ? setApiKeySet(true) : alert("Please enter a valid key starting with sk-ant-")}
+              style={{ background: "#c9b97a", color: "#0f0f0f", border: "none", borderRadius: "4px", padding: "12px 32px", fontSize: "14px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+              Continue →
+            </button>
+            <div style={{ marginTop: "16px", fontSize: "11px", color: "#555" }}>Get your key at platform.claude.com → API Keys</div>
           </div>
-          <div style={{ textAlign: "right", marginLeft: "16px" }}>
-            <div style={{ fontSize: "14px", color: "#c9b97a", fontStyle: "italic" }}>{amount}</div>
-            <div style={{ fontSize: "11px", color: "#555", marginTop: "1px" }}>{date}</div>
-          </div>
-        </div>
-      );
-    }
+        )}
 
-    function App() {
-      const [step, setStep] = useState("upload"); // upload | parsing | review | sheet | email
-      const [file, setFile] = useState(null);
-      const [month, setMonth] = useState("Jan '26");
-      const [account, setAccount] = useState("BoA");
-      const [matches, setMatches] = useState([]);
-      const [unmatched, setUnmatched] = useState([]);
-      const [missing, setMissing] = useState([]);
-      const [error, setError] = useState(null);
-      const [sheetsToken, setSheetsToken] = useState("");
-      const [sheetStatus, setSheetStatus] = useState(null);
-      const [gmailStatus, setGmailStatus] = useState(null);
-      const [emailCopied, setEmailCopied] = useState(false);
-      const [dragOver, setDragOver] = useState(false);
-      const [apiKey, setApiKey] = useState("");
-      const [apiKeySet, setApiKeySet] = useState(false);
-
-      // Multi-statement: store results from both accounts
-      const [boaResults, setBoaResults] = useState(null);   // {matches, unmatched, missing}
-      const [amexResults, setAmexResults] = useState(null); // {matches, unmatched, missing}
-      const [completedAccounts, setCompletedAccounts] = useState([]); // ["BoA", "Amex"]
-
-      function signInWithGoogle() {
-        if (!window.google) { setError("Google sign-in not loaded yet — please wait a moment and try again."); return; }
-        const client = window.google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: SCOPES,
-          callback: (response) => {
-            if (response.error) { setError("Google sign-in failed: " + response.error); return; }
-            setSheetsToken(response.access_token);
-          },
-        });
-        client.requestAccessToken();
-      }
-
-      async function parsePDF(pdfFile) {
-        setStep("parsing");
-        setError(null);
-        try {
-          const startPage = account === 'Amex' ? 3 : 1;
-          const pdfText = await extractTextFromPDF(pdfFile, startPage);
-          if (!pdfText || pdfText.trim().length < 50) throw new Error("Could not extract text from PDF. Please make sure it is not a scanned image PDF.");
-          // Limit text to 15000 chars to stay within API limits
-          const trimmedText = pdfText.substring(0, 15000);
-          const vendorList = VENDORS.filter(v => v.paymentMethod === account)
-            .map(v => `- ${v.name} (expected: ${v.expectedAmount ? fmt(v.expectedAmount) : "variable"}, usual day: ${v.chargeDay ?? "varies"})`)
-            .join("\n");
-
-          const prompt = `Extract ALL transactions from this bank statement as a JSON array. Each object needs: date (YYYY-MM-DD), description (original text), amount (positive=charge, negative=credit), vendorMatch (match to list below or null), matchConfidence (high/medium/low/none). Vendor list: ${vendorList}. Return ONLY valid JSON array, no other text.
-
-STATEMENT TEXT:
-${pdfText}`;
-
-          const response = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": apiKey,
-              "anthropic-version": "2023-06-01",
-              "anthropic-dangerous-direct-browser-access": "true",
-            },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 8000,
-              messages: [{ role: "user", content: prompt }]
-            })
-          });
-
-          const data = await response.json();
-          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-          if (!data.content || !Array.isArray(data.content)) throw new Error('Unexpected response: ' + JSON.stringify(data).substring(0, 200));
-          const raw = data.content.map(c => c.text || '').join('');
-          const clean = raw.replace(/```json|```/g, '').trim();
-          if (!clean) throw new Error('Empty response from API');
-          let parsed;
-          try { parsed = JSON.parse(clean); }
-          catch(e2) {
-            const start = clean.indexOf('[');
-            const end = clean.lastIndexOf(']');
-            if (start !== -1 && end !== -1 && end > start) {
-              try { parsed = JSON.parse(clean.substring(start, end + 1)); }
-              catch(e3) { throw new Error('Could not parse response: ' + clean.substring(0, 300)); }
-            } else {
-              throw new Error('Could not parse response: ' + clean.substring(0, 300));
-            }
-          } 300));
-          }
-          reconcile(parsed);
-          setStep('review');
-        } catch (e) {
-          setError("Failed to parse statement: " + e.message);
-          setStep("upload");
-        }
-      }
-
-      function reconcile(txns) {
-        const accountVendors = VENDORS.filter(v => v.paymentMethod === account);
-        const matched = [], unmatched = [];
-        const matchedNames = new Set();
-        for (const tx of txns) {
-          if (tx.amount <= 0) continue;
-          if (tx.vendorMatch && tx.matchConfidence !== "none") {
-            const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
-            const discrepancies = [];
-            if (vendor?.expectedAmount && Math.abs(tx.amount - vendor.expectedAmount) > 0.50) {
-              discrepancies.push(`Expected ${fmt(vendor.expectedAmount)}, charged ${fmt(tx.amount)}`);
-            }
-            matched.push({ ...tx, vendor, discrepancies });
-            matchedNames.add(tx.vendorMatch);
-          } else {
-            unmatched.push(tx);
-          }
-        }
-        const missing = accountVendors.filter(v => !matchedNames.has(v.name) && v.expectedAmount);
-        setMatches(matched);
-        setUnmatched(unmatched);
-        setMissing(missing);
-        // Save results per account for combined email
-        const results = { matches: matched, unmatched, missing, account };
-        if (account === "BoA") setBoaResults(results);
-        else setAmexResults(results);
-      }
-
-      async function writeToSheets() {
-        setSheetStatus("loading");
-        const monthIdx = MONTH_LABELS.indexOf(month);
-        const amountColIdx = 10 + monthIdx * 2;
-        const dateColIdx   = 11 + monthIdx * 2;
-        const colLetter = (i) => i < 26 ? String.fromCharCode(65 + i) : "A" + String.fromCharCode(65 + i - 26);
-        const amountCol = colLetter(amountColIdx);
-        const dateCol   = colLetter(dateColIdx);
-
-        try {
-          // Step 1: Read all vendor names from column A to find correct rows
-          const readRes = await fetch(
-            `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:A100`,
-            { headers: { "Authorization": `Bearer ${sheetsToken}` } }
-          );
-          const readJson = await readRes.json();
-          if (readJson.error) throw new Error("Could not read sheet: " + readJson.error.message);
-          
-          const sheetVendors = (readJson.values || []).map((row, idx) => ({
-            name: (row[0] || "").trim(),
-            row: idx + 1
-          }));
-
-          // Step 2: Build updates using actual row numbers from sheet
-          const updates = [];
-          for (const m of matches) {
-            const found = sheetVendors.find(v => 
-              v.name.toLowerCase() === m.vendorMatch.toLowerCase()
-            );
-            if (!found) continue;
-            updates.push({ range: `${amountCol}${found.row}`, values: [[m.amount]] });
-            updates.push({ range: `${dateCol}${found.row}`,   values: [[m.date]] });
-          }
-
-          if (updates.length === 0) throw new Error("No matching vendors found in sheet");
-
-          // Step 3: Write the updates
-          const writeRes = await fetch(
-            `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`,
-            {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updates })
-            }
-          );
-          const writeJson = await writeRes.json();
-          if (writeJson.error) throw new Error(writeJson.error.message);
-          setSheetStatus("success");
-        } catch (e) {
-          setSheetStatus("error: " + e.message);
-        }
-      }
-
-      function buildAccountSection(label, results) {
-        if (!results) return [];
-        const { matches: m, unmatched: u, missing: miss } = results;
-        const discrepant = m.filter(x => x.discrepancies.length > 0);
-        return [
-          "",
-          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-          `  ${label}`,
-          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-          "",
-          "✅  CONFIRMED PAYMENTS",
-          "───────────────────────────────────────────────",
-          ...m.filter(x => x.discrepancies.length === 0).map(
-            x => `  ${x.vendorMatch.padEnd(38)} ${fmt(x.amount).padStart(12)}   ${x.date}`
-          ),
-          ...(discrepant.length > 0 ? [
-            "",
-            "⚠️   DISCREPANCIES",
-            "───────────────────────────────────────────────",
-            ...discrepant.map(x => `  ${x.vendorMatch}\n    → ${x.discrepancies.join("; ")}`),
-          ] : []),
-          ...(miss.length > 0 ? [
-            "",
-            "❌  MISSING CHARGES",
-            "───────────────────────────────────────────────",
-            ...miss.map(v => `  ${v.name.padEnd(38)} ${fmt(v.expectedAmount).padStart(12)}`),
-          ] : []),
-          ...(u.length > 0 ? [
-            "",
-            "🔍  UNRECOGNIZED TRANSACTIONS",
-            "───────────────────────────────────────────────",
-            ...u.map(t => `  ${t.description.substring(0, 38).padEnd(38)} ${fmt(t.amount).padStart(12)}   ${t.date}`),
-          ] : []),
-        ];
-      }
-
-      function buildEmail() {
-        const allMatches = [
-          ...(boaResults ? boaResults.matches : []),
-          ...(amexResults ? amexResults.matches : []),
-        ];
-        const totalConfirmed = allMatches.filter(m => m.discrepancies.length === 0)
-          .reduce((sum, m) => sum + m.amount, 0);
-        const totalDiscrepancies = allMatches.filter(m => m.discrepancies.length > 0).length;
-        const totalMissing = [
-          ...(boaResults ? boaResults.missing : []),
-          ...(amexResults ? amexResults.missing : []),
-        ].length;
-
-        const lines = [
-          `MONTHLY RECONCILIATION SUMMARY — ${month}`,
-          `Generated: ${new Date().toLocaleDateString()}`,
-          "",
-          `  Total Confirmed Payments:  ${fmt(totalConfirmed)}`,
-          `  Discrepancies:             ${totalDiscrepancies}`,
-          `  Missing Charges:           ${totalMissing}`,
-          ...buildAccountSection("BANK OF AMERICA EXPENSE", boaResults),
-          ...buildAccountSection("AMERICAN EXPRESS", amexResults),
-        ];
-        return lines.join("\n");
-      }
-
-      async function sendGmail() {
-        setGmailStatus("loading");
-        const subject = `Reconciliation Summary — ${month}`;
-        const body = buildEmail();
-        const raw = [`To: me`, `Subject: ${subject}`, `Content-Type: text/plain; charset=utf-8`, ``, body].join("\n");
-        const encoded = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-        try {
-          const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ raw: encoded })
-          });
-          const json = await res.json();
-          if (json.error) throw new Error(json.error.message);
-          setGmailStatus("success");
-        } catch (e) {
-          setGmailStatus("error: " + e.message);
-        }
-      }
-
-      function copyEmail() {
-        navigator.clipboard.writeText(buildEmail());
-        setEmailCopied(true);
-        setTimeout(() => setEmailCopied(false), 2000);
-      }
-
-      const onDrop = useCallback((e) => {
-        e.preventDefault(); setDragOver(false);
-        const f = e.dataTransfer.files[0];
-        if (f?.type === "application/pdf") setFile(f);
-      }, []);
-
-      const discrepantCount = matches.filter(m => m.discrepancies.length > 0).length;
-
-      return (
-        <div style={{ minHeight: "100vh", background: "#0f0f0f" }}>
-          {/* Header */}
-          <div style={{ borderBottom: "1px solid #2a2a2a", padding: "28px 40px 20px", display: "flex", alignItems: "baseline", gap: "16px" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#666", textTransform: "uppercase" }}>Practice Finance</div>
-            <div style={{ fontSize: "22px", color: "#c9b97a", fontStyle: "italic" }}>Monthly Reconciliation</div>
-          </div>
-
-          <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px" }}>
-
-            {/* API KEY SETUP */}
-            {!apiKeySet && (
-              <div style={{ maxWidth: "500px", margin: "60px auto", textAlign: "center" }}>
-                <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Setup</div>
-                <div style={{ fontSize: "28px", marginBottom: "8px" }}>Enter Your API Key</div>
-                <div style={{ color: "#666", fontSize: "14px", marginBottom: "32px" }}>Your key stays in your browser only — never sent to GitHub</div>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}
-                  placeholder="sk-ant-..."
-                  style={{ width: "100%", background: "#1a1a1a", border: "1px solid #333", color: "#e8e3d5", padding: "12px 14px", fontSize: "13px", borderRadius: "4px", fontFamily: "monospace", marginBottom: "16px", boxSizing: "border-box" }}
-                />
-                <button
-                  onClick={() => { if (apiKey.startsWith("sk-ant-")) setApiKeySet(true); else alert("Please enter a valid Anthropic API key starting with sk-ant-"); }}
-                  style={{ background: "#c9b97a", color: "#0f0f0f", border: "none", borderRadius: "4px", padding: "12px 32px", fontSize: "14px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic" }}
-                >
-                  Continue →
-                </button>
-                <div style={{ marginTop: "16px", fontSize: "11px", color: "#555" }}>
-                  Get your key at platform.claude.com → API Keys
-                </div>
+        {/* UPLOAD */}
+        {apiKeySet && step === "upload" && (
+          <div>
+            <div style={{ marginBottom: "32px" }}>
+              <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 1 of 3</div>
+              <div style={{ fontSize: "28px", marginBottom: "6px" }}>Upload Bank Statement</div>
+              <div style={{ color: "#666", fontSize: "14px" }}>PDF export from {account === "BoA" ? "Bank of America" : "American Express"}</div>
+            </div>
+            <div style={{ display: "flex", gap: "16px", marginBottom: "28px" }}>
+              <div style={{ flex: 1 }}><span style={label}>Statement Month</span>
+                <select value={month} onChange={e => setMonth(e.target.value)} style={sel}>
+                  {MONTH_LABELS.map(m => <option key={m}>{m}</option>)}
+                </select>
               </div>
-            )}
+              <div style={{ flex: 1 }}><span style={label}>Account</span>
+                <select value={account} onChange={e => setAccount(e.target.value)} style={sel}>
+                  <option value="BoA">BoA Expense</option>
+                  <option value="Amex">American Express</option>
+                </select>
+              </div>
+            </div>
+            <div onDrop={onDrop} onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
+              onClick={() => document.getElementById("pdf-input").click()}
+              style={{ border: `2px dashed ${dragOver ? "#c9b97a" : file ? "#4a7c59" : "#333"}`, borderRadius: "8px", padding: "60px 40px", textAlign: "center", cursor: "pointer", background: "#141414", marginBottom: "24px" }}>
+              <div style={{ fontSize: "36px", marginBottom: "12px" }}>{file ? "📄" : "⬆️"}</div>
+              <div style={{ fontSize: "16px", color: file ? "#4a7c59" : "#999", marginBottom: "6px" }}>{file ? file.name : "Drop your PDF here, or click to browse"}</div>
+              <div style={{ fontSize: "12px", color: "#555" }}>{file ? `${(file.size/1024).toFixed(0)} KB` : "Accepts .pdf files"}</div>
+              <input id="pdf-input" type="file" accept="application/pdf" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
+            </div>
+            {error && <div style={{ background: "#2a1515", border: "1px solid #5a2020", borderRadius: "4px", padding: "12px 16px", marginBottom: "16px", color: "#e07070", fontSize: "13px" }}>{error}</div>}
+            <button onClick={() => file && parsePDF(file)} disabled={!file}
+              style={{ background: file ? "#c9b97a" : "#2a2a2a", color: file ? "#0f0f0f" : "#555", border: "none", borderRadius: "4px", padding: "14px 32px", fontSize: "14px", cursor: file ? "pointer" : "not-allowed", fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+              Analyze Statement →
+            </button>
+          </div>
+        )}
 
-            {/* UPLOAD */}
-            {apiKeySet && step === "upload" && (
+        {/* PARSING */}
+        {apiKeySet && step === "parsing" && (
+          <div style={{ textAlign: "center", padding: "80px 0" }}>
+            <div style={{ fontSize: "40px", marginBottom: "20px" }}>⚙️</div>
+            <div style={{ fontSize: "20px", color: "#c9b97a", marginBottom: "8px", fontStyle: "italic" }}>Reading your statement…</div>
+            <div style={{ color: "#555", fontSize: "13px" }}>Matching transactions to your vendor list</div>
+          </div>
+        )}
+
+        {/* REVIEW */}
+        {apiKeySet && step === "review" && (
+          <div>
+            <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
               <div>
-                <div style={{ marginBottom: "32px" }}>
-                  <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 1 of 3</div>
-                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>Upload Bank Statement</div>
-                  <div style={{ color: "#666", fontSize: "14px" }}>PDF export from Bank of America</div>
+                <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 2 of 3</div>
+                <div style={{ fontSize: "28px" }}>Reconciliation — {month} ({account})</div>
+              </div>
+              <button onClick={() => setStep("sheet")} style={B("#c9b97a", "#0f0f0f")}>Update Google Sheet →</button>
+            </div>
+            <div style={{ display: "flex", gap: "12px", marginBottom: "28px" }}>
+              {[
+                { label: "Matched", count: matches.length, color: "#4a7c59" },
+                { label: "Discrepancies", count: discrepantCount, color: "#c9a04a" },
+                { label: "Missing", count: missing.length, color: "#c94a4a" },
+                { label: "Unrecognized", count: unmatched.length, color: "#4a6a8a" },
+              ].map(b => (
+                <div key={b.label} style={{ background: "#1a1a1a", border: `1px solid ${b.color}44`, borderRadius: "6px", padding: "12px 20px", textAlign: "center", flex: 1 }}>
+                  <div style={{ fontSize: "24px", color: b.color, fontStyle: "italic" }}>{b.count}</div>
+                  <div style={{ fontSize: "11px", color: "#666", letterSpacing: "1px", textTransform: "uppercase", marginTop: "2px" }}>{b.label}</div>
                 </div>
+              ))}
+            </div>
+            {matches.length > 0 && (
+              <Section title="✅ Confirmed Payments" color="#4a7c59">
+                {matches.map((m, i) => <Row key={i} label={m.vendorMatch} amount={fmt(m.amount)} date={m.date} note={m.discrepancies.length > 0 ? m.discrepancies.join("; ") : null} noteColor="#c9a04a" warn={m.discrepancies.length > 0} />)}
+              </Section>
+            )}
+            {missing.length > 0 && (
+              <Section title="❌ Missing Charges" color="#c94a4a">
+                {missing.map((v, i) => <Row key={i} label={v.name} amount={fmt(v.expectedAmount)} date={`expected ~${v.chargeDay ?? "?"}`} noteColor="#c94a4a" />)}
+              </Section>
+            )}
+            {unmatched.length > 0 && (
+              <Section title="🔍 Unrecognized Transactions" color="#4a6a8a">
+                {unmatched.map((t, i) => <Row key={i} label={t.description} amount={fmt(t.amount)} date={t.date} />)}
+              </Section>
+            )}
+          </div>
+        )}
 
-                <div style={{ display: "flex", gap: "16px", marginBottom: "28px" }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: "11px", letterSpacing: "2px", color: "#888", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Statement Month</label>
-                    <select value={month} onChange={e => setMonth(e.target.value)} style={{ width: "100%", background: "#1a1a1a", border: "1px solid #333", color: "#e8e3d5", padding: "10px 14px", fontSize: "14px", borderRadius: "4px" }}>
-                      {MONTH_LABELS.map(m => <option key={m}>{m}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: "11px", letterSpacing: "2px", color: "#888", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Account</label>
-                    <select value={account} onChange={e => setAccount(e.target.value)} style={{ width: "100%", background: "#1a1a1a", border: "1px solid #333", color: "#e8e3d5", padding: "10px 14px", fontSize: "14px", borderRadius: "4px" }}>
-                      <option value="BoA">BoA Expense</option>
-                      <option value="Amex">American Express</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div
-                  onDrop={onDrop}
-                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onClick={() => document.getElementById("pdf-input").click()}
-                  style={{ border: `2px dashed ${dragOver ? "#c9b97a" : file ? "#4a7c59" : "#333"}`, borderRadius: "8px", padding: "60px 40px", textAlign: "center", cursor: "pointer", background: dragOver ? "#1a1a14" : "#141414", transition: "all 0.2s", marginBottom: "24px" }}
-                >
-                  <div style={{ fontSize: "36px", marginBottom: "12px" }}>{file ? "📄" : "⬆️"}</div>
-                  <div style={{ fontSize: "16px", color: file ? "#4a7c59" : "#999", marginBottom: "6px" }}>{file ? file.name : "Drop your PDF here, or click to browse"}</div>
-                  <div style={{ fontSize: "12px", color: "#555" }}>{file ? `${(file.size/1024).toFixed(0)} KB` : "Accepts .pdf files from Bank of America"}</div>
-                  <input id="pdf-input" type="file" accept="application/pdf" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
-                </div>
-
-                {error && <div style={{ background: "#2a1515", border: "1px solid #5a2020", borderRadius: "4px", padding: "12px 16px", marginBottom: "16px", color: "#e07070", fontSize: "13px" }}>{error}</div>}
-
-                <button onClick={() => file && parsePDF(file)} disabled={!file}
-                  style={{ background: file ? "#c9b97a" : "#2a2a2a", color: file ? "#0f0f0f" : "#555", border: "none", borderRadius: "4px", padding: "14px 32px", fontSize: "14px", letterSpacing: "1px", cursor: file ? "pointer" : "not-allowed", fontFamily: "Georgia, serif", fontStyle: "italic" }}>
-                  Analyze Statement →
+        {/* SHEET */}
+        {apiKeySet && step === "sheet" && (
+          <div>
+            <div style={{ marginBottom: "32px" }}>
+              <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 3 of 3</div>
+              <div style={{ fontSize: "28px", marginBottom: "6px" }}>Update Google Sheet</div>
+              <div style={{ color: "#666", fontSize: "14px" }}>Sign in with Google to write to your spreadsheet</div>
+            </div>
+            {!sheetsToken ? (
+              <div style={{ textAlign: "center", padding: "40px 0" }}>
+                <div style={{ color: "#888", fontSize: "14px", marginBottom: "24px" }}>Authorize access to your Google Sheet and Gmail</div>
+                <button onClick={signInWithGoogle} style={{ background: "#fff", color: "#333", border: "1px solid #ddd", borderRadius: "6px", padding: "14px 28px", fontSize: "15px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}>
+                  <svg width="20" height="20" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  </svg>
+                  Sign in with Google
                 </button>
               </div>
-            )}
-
-            {/* PARSING */}
-            {apiKeySet && step === "parsing" && (
-              <div style={{ textAlign: "center", padding: "80px 0" }}>
-                <div style={{ fontSize: "40px", marginBottom: "20px" }}>⚙️</div>
-                <div style={{ fontSize: "20px", color: "#c9b97a", marginBottom: "8px", fontStyle: "italic" }}>Reading your statement…</div>
-                <div style={{ color: "#555", fontSize: "13px" }}>Matching transactions to your vendor list</div>
-              </div>
-            )}
-
-            {/* REVIEW */}
-            {apiKeySet && step === "review" && (
+            ) : (
               <div>
-                <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                <div style={{ background: "#0f1a12", border: "1px solid #2a4a2a", borderRadius: "8px", padding: "16px 20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ color: "#4a7c59", fontSize: "18px" }}>✓</div>
+                  <div style={{ color: "#7ab87a", fontSize: "14px" }}>Signed in — ready to update your sheet</div>
+                </div>
+                <div style={{ display: "flex", gap: "12px", marginBottom: "24px" }}>
+                  <button onClick={writeToSheets} style={B("#c9b97a", "#0f0f0f")}>Write to Sheet</button>
+                  <button onClick={() => setStep("email")} style={B("#2a2a2a", "#888")}>Skip → Email</button>
+                </div>
+                {sheetStatus === "loading" && <Msg color="#c9b97a">Writing to Google Sheets…</Msg>}
+                {sheetStatus === "success" && (
                   <div>
-                    <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 2 of 3</div>
-                    <div style={{ fontSize: "28px" }}>Reconciliation — {month}</div>
-                  </div>
-                  <button onClick={() => setStep("sheet")} style={btnStyle("#c9b97a", "#0f0f0f")}>Update Google Sheet →</button>
-                </div>
-
-                <div style={{ display: "flex", gap: "12px", marginBottom: "28px" }}>
-                  {[
-                    { label: "Matched",        count: matches.length,    color: "#4a7c59" },
-                    { label: "Discrepancies",  count: discrepantCount,   color: "#c9a04a" },
-                    { label: "Missing",        count: missing.length,    color: "#c94a4a" },
-                    { label: "Unrecognized",   count: unmatched.length,  color: "#4a6a8a" },
-                  ].map(b => (
-                    <div key={b.label} style={{ background: "#1a1a1a", border: `1px solid ${b.color}44`, borderRadius: "6px", padding: "12px 20px", textAlign: "center", flex: 1 }}>
-                      <div style={{ fontSize: "24px", color: b.color, fontStyle: "italic" }}>{b.count}</div>
-                      <div style={{ fontSize: "11px", color: "#666", letterSpacing: "1px", textTransform: "uppercase", marginTop: "2px" }}>{b.label}</div>
+                    <Msg color="#4a7c59">✅ {account} sheet updated!</Msg>
+                    <div style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
+                      {account === "BoA" && !amexResults && (
+                        <button onClick={() => { setAccount("Amex"); setFile(null); setMatches([]); setUnmatched([]); setMissing([]); setSheetStatus(null); setStep("upload"); }} style={B("#4a6a8a", "#fff")}>
+                          + Add Amex Statement →
+                        </button>
+                      )}
+                      <button onClick={() => setStep("email")} style={B("#4a7c59", "#fff")}>
+                        {amexResults || account === "Amex" ? "Generate & Send Email →" : "Skip Amex → Email"}
+                      </button>
                     </div>
-                  ))}
-                </div>
-
-                {matches.length > 0 && (
-                  <Section title="✅ Confirmed Payments" color="#4a7c59">
-                    {matches.map((m, i) => <Row key={i} label={m.vendorMatch} amount={fmt(m.amount)} date={m.date} note={m.discrepancies.length > 0 ? m.discrepancies.join("; ") : null} noteColor="#c9a04a" warn={m.discrepancies.length > 0} />)}
-                  </Section>
-                )}
-                {missing.length > 0 && (
-                  <Section title="❌ Missing Charges" color="#c94a4a">
-                    {missing.map((v, i) => <Row key={i} label={v.name} amount={fmt(v.expectedAmount)} date={`expected ~${v.chargeDay ?? "?"}`} noteColor="#c94a4a" />)}
-                  </Section>
-                )}
-                {unmatched.length > 0 && (
-                  <Section title="🔍 Unrecognized Transactions" color="#4a6a8a">
-                    {unmatched.map((t, i) => <Row key={i} label={t.description} amount={fmt(t.amount)} date={t.date} />)}
-                  </Section>
-                )}
-              </div>
-            )}
-
-            {/* SHEET */}
-            {apiKeySet && step === "sheet" && (
-              <div>
-                <div style={{ marginBottom: "32px" }}>
-                  <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 3 of 3</div>
-                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>Update Google Sheet</div>
-                  <div style={{ color: "#666", fontSize: "14px" }}>Sign in with Google to write directly to your spreadsheet and send the summary email</div>
-                </div>
-
-                {!sheetsToken ? (
-                  <div style={{ textAlign: "center", padding: "40px 0" }}>
-                    <div style={{ color: "#888", fontSize: "14px", marginBottom: "24px" }}>Authorize access to your Google Sheet and Gmail</div>
-                    <button onClick={signInWithGoogle} style={{ background: "#fff", color: "#333", border: "1px solid #ddd", borderRadius: "6px", padding: "14px 28px", fontSize: "15px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}>
-                      <svg width="20" height="20" viewBox="0 0 48 48">
-                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                      </svg>
-                      Sign in with Google
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ background: "#0f1a12", border: "1px solid #2a4a2a", borderRadius: "8px", padding: "16px 20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={{ color: "#4a7c59", fontSize: "18px" }}>✓</div>
-                      <div style={{ color: "#7ab87a", fontSize: "14px" }}>Signed in to Google — ready to update your sheet</div>
-                    </div>
-                    <div style={{ display: "flex", gap: "12px", marginBottom: "24px" }}>
-                      <button onClick={writeToSheets} style={btnStyle("#c9b97a", "#0f0f0f")}>Write to Sheet</button>
-                      <button onClick={() => setStep("email")} style={btnStyle("#2a2a2a", "#888")}>Skip → Generate Email</button>
-                    </div>
-                    {sheetStatus === "loading" && <StatusMsg color="#c9b97a">Writing to Google Sheets…</StatusMsg>}
-                    {sheetStatus === "success" && (
-                      <div>
-                        <StatusMsg color="#4a7c59">✅ {account} sheet updated successfully!</StatusMsg>
-                        <div style={{ display: "flex", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
-                          {account === "BoA" && !amexResults && (
-                            <button onClick={() => {
-                              setAccount("Amex");
-                              setFile(null);
-                              setMatches([]);
-                              setUnmatched([]);
-                              setMissing([]);
-                              setSheetStatus(null);
-                              setStep("upload");
-                            }} style={btnStyle("#4a6a8a", "#fff")}>
-                              + Add Amex Statement →
-                            </button>
-                          )}
-                          <button onClick={() => setStep("email")} style={btnStyle("#4a7c59", "#fff")}>
-                            {amexResults || account === "Amex" ? "Generate & Send Summary Email →" : "Skip Amex → Generate Email"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {sheetStatus?.startsWith("error") && <StatusMsg color="#c94a4a">{sheetStatus}</StatusMsg>}
                   </div>
                 )}
+                {sheetStatus?.startsWith("error") && <Msg color="#c94a4a">{sheetStatus}</Msg>}
               </div>
             )}
-
-            {/* EMAIL */}
-            {apiKeySet && step === "email" && (
-              <div>
-                <div style={{ marginBottom: "24px" }}>
-                  <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Done</div>
-                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>Summary Email</div>
-                  <div style={{ color: "#666", fontSize: "14px" }}>Send the reconciliation summary to your inbox</div>
-                </div>
-
-                <pre style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "24px", color: "#c8c0a8", fontSize: "13px", lineHeight: "1.7", whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: "400px", overflowY: "auto", fontFamily: "'Courier New', monospace" }}>
-                  {buildEmail()}
-                </pre>
-
-                <div style={{ display: "flex", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
-                  {sheetsToken && (
-                    <button onClick={sendGmail} style={btnStyle("#c9b97a", "#0f0f0f")}>
-                      {gmailStatus === "loading" ? "Sending…" : gmailStatus === "success" ? "✓ Sent!" : "Send to My Email"}
-                    </button>
-                  )}
-                  <button onClick={copyEmail} style={btnStyle(sheetsToken ? "#2a2a2a" : "#c9b97a", sheetsToken ? "#aaa" : "#0f0f0f")}>
-                    {emailCopied ? "✓ Copied!" : "Copy to Clipboard"}
-                  </button>
-                  <button onClick={() => window.open(`mailto:?subject=Reconciliation ${month}&body=${encodeURIComponent(buildEmail())}`)} style={btnStyle("#2a2a2a", "#aaa")}>
-                    Open in Mail App
-                  </button>
-                  <button onClick={() => { setStep("upload"); setFile(null); setMatches([]); setUnmatched([]); setMissing([]); setSheetStatus(null); setGmailStatus(null); }} style={btnStyle("#1a1a1a", "#666")}>
-                    Start New Month
-                  </button>
-                </div>
-                {gmailStatus?.startsWith("error") && <div style={{ marginTop: "12px" }}><StatusMsg color="#c94a4a">{gmailStatus}</StatusMsg></div>}
-              </div>
-            )}
-
           </div>
-        </div>
-      );
-    }
+        )}
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
+        {/* EMAIL */}
+        {apiKeySet && step === "email" && (
+          <div>
+            <div style={{ marginBottom: "24px" }}>
+              <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Done</div>
+              <div style={{ fontSize: "28px", marginBottom: "6px" }}>Summary Email</div>
+            </div>
+            <pre style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "24px", color: "#c8c0a8", fontSize: "13px", lineHeight: "1.7", whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: "400px", overflowY: "auto", fontFamily: "'Courier New', monospace" }}>
+              {buildEmail()}
+            </pre>
+            <div style={{ display: "flex", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
+              {sheetsToken && (
+                <button onClick={sendGmail} style={B("#c9b97a", "#0f0f0f")}>
+                  {gmailStatus === "loading" ? "Sending…" : gmailStatus === "success" ? "✓ Sent!" : "Send to My Email"}
+                </button>
+              )}
+              <button onClick={copyEmail} style={B("#2a2a2a", "#aaa")}>{emailCopied ? "✓ Copied!" : "Copy"}</button>
+              <button onClick={() => window.open(`mailto:?subject=Reconciliation ${month}&body=${encodeURIComponent(buildEmail())}`)} style={B("#2a2a2a", "#aaa")}>Open in Mail</button>
+              <button onClick={() => { setStep("upload"); setFile(null); setMatches([]); setUnmatched([]); setMissing([]); setSheetStatus(null); setGmailStatus(null); setBoaResults(null); setAmexResults(null); setAccount("BoA"); }} style={B("#1a1a1a", "#666")}>
+                Start New Month
+              </button>
+            </div>
+            {gmailStatus?.startsWith("error") && <div style={{ marginTop: "12px" }}><Msg color="#c94a4a">{gmailStatus}</Msg></div>}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
 </body>
 </html>
