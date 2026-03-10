@@ -4,6 +4,9 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -12,10 +15,11 @@ jobs:
       
       - name: Inject API Key
         run: |
-          sed -i 's|REPLACE_WITH_YOUR_API_KEY|'"${{ secrets.ANTHROPIC_API_KEY }}"'|g' index.html
+          sed -i 's|REPLACE_WITH_YOUR_API_KEY|${{ secrets.ANTHROPIC_API_KEY }}|g' index.html
       
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
+          publish_branch: gh-pages
