@@ -227,28 +227,50 @@ ${pdfText}`;
       async function writeToSheets() {
         setSheetStatus("loading");
         const monthIdx = MONTH_LABELS.indexOf(month);
-        // Columns: Jan '26 amount = col K (11th col = index 10)
-        // Each month = 2 cols. K=10, L=11 for Jan; M=12, N=13 for Feb; etc.
         const amountColIdx = 10 + monthIdx * 2;
         const dateColIdx   = 11 + monthIdx * 2;
         const colLetter = (i) => i < 26 ? String.fromCharCode(65 + i) : "A" + String.fromCharCode(65 + i - 26);
+        const amountCol = colLetter(amountColIdx);
+        const dateCol   = colLetter(dateColIdx);
 
-        const updates = [];
-        for (const m of matches) {
-          const rowIdx = VENDORS.findIndex(v => v.name === m.vendorMatch);
-          if (rowIdx === -1) continue;
-          const row = rowIdx + 2;
-          updates.push({ range: `${colLetter(amountColIdx)}${row}`, values: [[m.amount]] });
-          updates.push({ range: `${colLetter(dateColIdx)}${row}`,   values: [[m.date]] });
-        }
         try {
-          const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updates })
-          });
-          const json = await res.json();
-          if (json.error) throw new Error(json.error.message);
+          // Step 1: Read all vendor names from column A to find correct rows
+          const readRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:A100`,
+            { headers: { "Authorization": `Bearer ${sheetsToken}` } }
+          );
+          const readJson = await readRes.json();
+          if (readJson.error) throw new Error("Could not read sheet: " + readJson.error.message);
+          
+          const sheetVendors = (readJson.values || []).map((row, idx) => ({
+            name: (row[0] || "").trim(),
+            row: idx + 1
+          }));
+
+          // Step 2: Build updates using actual row numbers from sheet
+          const updates = [];
+          for (const m of matches) {
+            const found = sheetVendors.find(v => 
+              v.name.toLowerCase() === m.vendorMatch.toLowerCase()
+            );
+            if (!found) continue;
+            updates.push({ range: `${amountCol}${found.row}`, values: [[m.amount]] });
+            updates.push({ range: `${dateCol}${found.row}`,   values: [[m.date]] });
+          }
+
+          if (updates.length === 0) throw new Error("No matching vendors found in sheet");
+
+          // Step 3: Write the updates
+          const writeRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`,
+            {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updates })
+            }
+          );
+          const writeJson = await writeRes.json();
+          if (writeJson.error) throw new Error(writeJson.error.message);
           setSheetStatus("success");
         } catch (e) {
           setSheetStatus("error: " + e.message);
