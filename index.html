@@ -175,12 +175,20 @@ Return ONLY the JSON array, no markdown, no explanation.`;
           });
 
           const data = await response.json();
-          if (data.error) throw new Error(data.error.message);
-          const raw = data.content.map(c => c.text || "").join("");
-          const clean = raw.replace(/```json|```/g, "").trim();
-          const parsed = JSON.parse(clean);
+          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+          if (!data.content || !Array.isArray(data.content)) throw new Error('Unexpected response: ' + JSON.stringify(data).substring(0, 200));
+          const raw = data.content.map(c => c.text || '').join('');
+          const clean = raw.replace(/```json|```/g, '').trim();
+          if (!clean) throw new Error('Empty response from API');
+          let parsed;
+          try { parsed = JSON.parse(clean); }
+          catch(e2) {
+            const match = clean.match(/\[[\s\S]*\]/);
+            if (match) parsed = JSON.parse(match[0]);
+            else throw new Error('Could not parse response: ' + clean.substring(0, 300));
+          }
           reconcile(parsed);
-          setStep("review");
+          setStep('review');
         } catch (e) {
           setError("Failed to parse statement: " + e.message);
           setStep("upload");
