@@ -160,12 +160,52 @@ function App() {
               expectedAmount: row[7] ? parseFloat(row[7].toString().replace(/[$,]/g, "")) || null : null,
             })).filter(v => v.name);
             setSheetVendors(vendors);
+            // Re-reconcile with live expected amounts
+            reReconcile(vendors);
           }
         } catch(e) {
           console.warn("Could not load sheet vendors:", e);
         }
       },
     }).requestAccessToken();
+  }
+
+  function reReconcile(liveVendors) {
+    // Re-evaluate discrepancies using live sheet amounts
+    setMatches(prev => prev.map(m => {
+      const liveV = liveVendors.find(v => v.name.toLowerCase() === (m.vendorMatch || "").toLowerCase());
+      const expectedAmt = liveV?.expectedAmount ?? m.vendor?.expectedAmount;
+      const discrepancies = [];
+      if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
+        discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
+      }
+      return { ...m, discrepancies };
+    }));
+    // Also update boaResults and amexResults
+    setBoaResults(prev => {
+      if (!prev) return prev;
+      return { ...prev, matches: prev.matches.map(m => {
+        const liveV = liveVendors.find(v => v.name.toLowerCase() === (m.vendorMatch || "").toLowerCase());
+        const expectedAmt = liveV?.expectedAmount ?? m.vendor?.expectedAmount;
+        const discrepancies = [];
+        if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
+          discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
+        }
+        return { ...m, discrepancies };
+      })};
+    });
+    setAmexResults(prev => {
+      if (!prev) return prev;
+      return { ...prev, matches: prev.matches.map(m => {
+        const liveV = liveVendors.find(v => v.name.toLowerCase() === (m.vendorMatch || "").toLowerCase());
+        const expectedAmt = liveV?.expectedAmount ?? m.vendor?.expectedAmount;
+        const discrepancies = [];
+        if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
+          discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
+        }
+        return { ...m, discrepancies };
+      })};
+    });
   }
 
   async function parsePDF(pdfFile) {
@@ -424,6 +464,9 @@ function App() {
               <div>
                 <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 2 of 3</div>
                 <div style={{ fontSize: "28px" }}>Reconciliation — {month} ({account})</div>
+                <div style={{ fontSize: "12px", marginTop: "6px", color: sheetVendors ? "#4a7c59" : "#666" }}>
+                  {sheetVendors ? `✓ Using live amounts from your Google Sheet` : `Using hardcoded amounts — sign in on Step 3 to sync`}
+                </div>
               </div>
               <button onClick={() => setStep("sheet")} style={B("#c9b97a", "#0f0f0f")}>Update Google Sheet →</button>
             </div>
