@@ -23,7 +23,7 @@
     const { useState, useCallback, useEffect } = React;
 
     const GOOGLE_CLIENT_ID = "560520441116-fc8a98udbchoqq253ifdk6607p5ss4bm.apps.googleusercontent.com";
-    const ANTHROPIC_API_KEY = "REPLACE_WITH_YOUR_API_KEY";    
+    const ANTHROPIC_API_KEY = ""; // Set at runtime via UI // sk-ant-...
     const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/gmail.send";
     const SHEET_ID = "141fQX9yQxBToRS-yZHuDzOjD3KKCtRAyObvewDE-mqs";
     const MONTH_LABELS = ["Jan '26","Feb '26","Mar '26","Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26"];
@@ -145,6 +145,8 @@
       const [gmailStatus, setGmailStatus] = useState(null);
       const [emailCopied, setEmailCopied] = useState(false);
       const [dragOver, setDragOver] = useState(false);
+      const [apiKey, setApiKey] = useState("");
+      const [apiKeySet, setApiKeySet] = useState(false);
 
       // Multi-statement: store results from both accounts
       const [boaResults, setBoaResults] = useState(null);   // {matches, unmatched, missing}
@@ -196,7 +198,7 @@ ${trimmedText}`;
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-api-key": ANTHROPIC_API_KEY,
+              "x-api-key": apiKey,
               "anthropic-version": "2023-06-01",
               "anthropic-dangerous-direct-browser-access": "true",
             },
@@ -415,8 +417,33 @@ ${trimmedText}`;
 
           <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px" }}>
 
+            {/* API KEY SETUP */}
+            {!apiKeySet && (
+              <div style={{ maxWidth: "500px", margin: "60px auto", textAlign: "center" }}>
+                <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Setup</div>
+                <div style={{ fontSize: "28px", marginBottom: "8px" }}>Enter Your API Key</div>
+                <div style={{ color: "#666", fontSize: "14px", marginBottom: "32px" }}>Your key stays in your browser only — never sent to GitHub</div>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  placeholder="sk-ant-..."
+                  style={{ width: "100%", background: "#1a1a1a", border: "1px solid #333", color: "#e8e3d5", padding: "12px 14px", fontSize: "13px", borderRadius: "4px", fontFamily: "monospace", marginBottom: "16px", boxSizing: "border-box" }}
+                />
+                <button
+                  onClick={() => { if (apiKey.startsWith("sk-ant-")) setApiKeySet(true); else alert("Please enter a valid Anthropic API key starting with sk-ant-"); }}
+                  style={{ background: "#c9b97a", color: "#0f0f0f", border: "none", borderRadius: "4px", padding: "12px 32px", fontSize: "14px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic" }}
+                >
+                  Continue →
+                </button>
+                <div style={{ marginTop: "16px", fontSize: "11px", color: "#555" }}>
+                  Get your key at platform.claude.com → API Keys
+                </div>
+              </div>
+            )}
+
             {/* UPLOAD */}
-            {step === "upload" && (
+            {apiKeySet && step === "upload" && (
               <div>
                 <div style={{ marginBottom: "32px" }}>
                   <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 1 of 3</div>
@@ -463,7 +490,7 @@ ${trimmedText}`;
             )}
 
             {/* PARSING */}
-            {step === "parsing" && (
+            {apiKeySet && step === "parsing" && (
               <div style={{ textAlign: "center", padding: "80px 0" }}>
                 <div style={{ fontSize: "40px", marginBottom: "20px" }}>⚙️</div>
                 <div style={{ fontSize: "20px", color: "#c9b97a", marginBottom: "8px", fontStyle: "italic" }}>Reading your statement…</div>
@@ -472,7 +499,7 @@ ${trimmedText}`;
             )}
 
             {/* REVIEW */}
-            {step === "review" && (
+            {apiKeySet && step === "review" && (
               <div>
                 <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                   <div>
@@ -515,7 +542,7 @@ ${trimmedText}`;
             )}
 
             {/* SHEET */}
-            {step === "sheet" && (
+            {apiKeySet && step === "sheet" && (
               <div>
                 <div style={{ marginBottom: "32px" }}>
                   <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 3 of 3</div>
@@ -577,7 +604,7 @@ ${trimmedText}`;
             )}
 
             {/* EMAIL */}
-            {step === "email" && (
+            {apiKeySet && step === "email" && (
               <div>
                 <div style={{ marginBottom: "24px" }}>
                   <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Done</div>
