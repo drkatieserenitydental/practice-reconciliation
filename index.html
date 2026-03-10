@@ -8,6 +8,7 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0f0f0f; color: #e8e3d5; font-family: Georgia, 'Times New Roman', serif; }
@@ -66,13 +67,17 @@
       { name: "Pittman - Plaisance",               expectedAmount: null,     chargeDay: 10,   paymentMethod: "Amex" },
     ];
 
-    function toBase64(file) {
-      return new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(",")[1]);
-        r.onerror = () => rej(new Error("Read failed"));
-        r.readAsDataURL(file);
-      });
+    async function extractTextFromPDF(file) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let text = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(item => item.str).join(" ") + "\n";
+      }
+      return text;
     }
 
     function fmt(n) {
@@ -144,12 +149,12 @@
         setStep("parsing");
         setError(null);
         try {
-          const base64 = await toBase64(pdfFile);
+          const pdfText = await extractTextFromPDF(pdfFile);
           const vendorList = VENDORS.filter(v => v.paymentMethod === account)
             .map(v => `- ${v.name} (expected: ${v.expectedAmount ? fmt(v.expectedAmount) : "variable"}, usual day: ${v.chargeDay ?? "varies"})`)
             .join("\n");
 
-          const prompt = `You are analyzing a bank statement PDF. Extract ALL transactions and return ONLY a JSON array.
+          const prompt = `You are analyzing a bank statement. Extract ALL transactions and return ONLY a JSON array.
 
 Each transaction object must have:
 - "date": "YYYY-MM-DD"
@@ -159,7 +164,10 @@ Each transaction object must have:
 ${vendorList}
 - "matchConfidence": "high" | "medium" | "low" | "none"
 
-Return ONLY the JSON array, no markdown, no explanation.`;
+Return ONLY the JSON array, no markdown, no explanation.
+
+BANK STATEMENT TEXT:
+${pdfText}`;
 
           const response = await fetch("/.netlify/functions/anthropic-proxy", {
             method: "POST",
@@ -167,10 +175,7 @@ Return ONLY the JSON array, no markdown, no explanation.`;
             body: JSON.stringify({
               model: "claude-sonnet-4-20250514",
               max_tokens: 4000,
-              messages: [{ role: "user", content: [
-                { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-                { type: "text", text: prompt }
-              ]}]
+              messages: [{ role: "user", content: prompt }]
             })
           });
 
