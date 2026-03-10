@@ -23,6 +23,7 @@
     const { useState, useCallback, useEffect } = React;
 
     const GOOGLE_CLIENT_ID = "560520441116-fc8a98udbchoqq253ifdk6607p5ss4bm.apps.googleusercontent.com";
+    const ANTHROPIC_API_KEY = "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"
     const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/gmail.send";
     const SHEET_ID = "141fQX9yQxBToRS-yZHuDzOjD3KKCtRAyObvewDE-mqs";
     const MONTH_LABELS = ["Jan '26","Feb '26","Mar '26","Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26"];
@@ -68,18 +69,29 @@
     ];
 
     async function extractTextFromPDF(file, startPage = 1) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let text = "";
-      for (let i = startPage; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        text += content.items.map(item => item.str).join(" ") + "\n";
+      try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+        let text = "";
+        const endPage = Math.min(pdf.numPages, startPage + 20); // max 20 pages
+        for (let i = startPage; i <= endPage; i++) {
+          try {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            const pageText = content.items.map(item => item.str || "").join(" ");
+            text += pageText + "\n";
+          } catch(pageErr) {
+            console.warn("Could not read page " + i, pageErr);
+          }
+        }
+        if (!text.trim()) throw new Error("No text could be extracted from this PDF");
+        // Trim to 60,000 chars max
+        if (text.length > 60000) text = text.substring(0, 60000);
+        return text;
+      } catch(e) {
+        throw new Error("PDF extraction failed: " + e.message);
       }
-      // Trim to 80,000 chars max to stay well under Netlify's 6MB body limit
-      if (text.length > 80000) text = text.substring(0, 80000);
-      return text;
     }
 
     function fmt(n) {
@@ -180,9 +192,14 @@ Return ONLY the JSON array, no markdown, no explanation.
 BANK STATEMENT TEXT:
 ${trimmedText}`;
 
-          const response = await fetch("/.netlify/functions/anthropic-proxy", {
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+              "anthropic-dangerous-direct-browser-access": "true",
+            },
             body: JSON.stringify({
               model: "claude-sonnet-4-20250514",
               max_tokens: 4000,
