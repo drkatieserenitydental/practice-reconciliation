@@ -247,7 +247,7 @@ function App() {
       const end = raw.lastIndexOf("]");
       if (start === -1 || end === -1) throw new Error("No JSON array in response: " + raw.substring(0, 200));
       const parsed = JSON.parse(raw.substring(start, end + 1));
-      reconcile(parsed);
+      reconcile(parsed, sheetVendors);
       setStep("review");
     } catch (e) {
       setError("Failed to parse statement: " + e.message);
@@ -255,7 +255,7 @@ function App() {
     }
   }
 
-  function reconcile(txns) {
+  function reconcile(txns, liveVendors) {
     const accountVendors = VENDORS.filter(v => v.method === account);
     const matched = [], unmatched = [];
     const matchedNames = new Set();
@@ -263,7 +263,7 @@ function App() {
       if (tx.amount <= 0) continue;
       if (tx.vendorMatch && tx.matchConfidence !== "none") {
         const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
-        const liveVendor = sheetVendors ? sheetVendors.find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
+        const liveVendor = (liveVendors || sheetVendors) ? (liveVendors || sheetVendors).find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
         const expectedAmt = liveVendor?.expectedAmount ?? vendor?.expectedAmount;
         // Special case: Cloud — membership fee is "CloudDentistry", service fee is "clouddentistry.com"
         // Only track the membership fee, ignore service fees
@@ -286,10 +286,11 @@ function App() {
         unmatched.push(tx);
       }
     }
+    const activeLiveVendors = liveVendors || sheetVendors;
     const miss = accountVendors.filter(v => {
       if (matchedNames.has(v.name)) return false;
-      if (v.optional) return false; // optional vendors never flagged as missing
-      const liveV = sheetVendors ? sheetVendors.find(s => s.name.toLowerCase() === v.name.toLowerCase()) : null;
+      if (v.optional) return false;
+      const liveV = activeLiveVendors ? activeLiveVendors.find(s => s.name.toLowerCase() === v.name.toLowerCase()) : null;
       const amt = liveV?.expectedAmount ?? v.expectedAmount;
       return amt != null;
     });
