@@ -263,9 +263,15 @@ function App() {
       if (tx.amount <= 0) continue;
       if (tx.vendorMatch && tx.matchConfidence !== "none") {
         const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
-        // Use live sheet amount if available, otherwise fall back to hardcoded
         const liveVendor = sheetVendors ? sheetVendors.find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
         const expectedAmt = liveVendor?.expectedAmount ?? vendor?.expectedAmount;
+        // Special case: Cloud — only track the monthly membership fee (~$117), ignore service fees
+        if (tx.vendorMatch === "Cloud" && expectedAmt) {
+          if (Math.abs(tx.amount - expectedAmt) > 10) {
+            unmatched.push({ ...tx, description: tx.description + " [Cloud service fee — not tracked]" });
+            continue;
+          }
+        }
         const discrepancies = [];
         if (expectedAmt && Math.abs(tx.amount - expectedAmt) > 0.50) {
           discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(tx.amount)}`);
