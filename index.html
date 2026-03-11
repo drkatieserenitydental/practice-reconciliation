@@ -59,7 +59,7 @@ const VENDORS = [
   { name: "Florida Probe",                   expectedAmount: 99.00,   chargeDay: 23,   method: "Amex" },
   { name: "Comcast Business",                expectedAmount: 359.38,  chargeDay: 25,   method: "Amex" },
   { name: "Spotify",                         expectedAmount: 19.99,   chargeDay: 25,   method: "Amex" },
-  { name: "Dexis Complete",                  expectedAmount: 258.00,  chargeDay: 25,   method: "Amex" },
+  { name: "Dexis Complete",                  expectedAmount: 258.00,  chargeDay: 25,   method: "Amex", optional: true },
   { name: "NexAir (Rental)",                 expectedAmount: null,    chargeDay: 31,   method: "Amex" },
   { name: "NexAir Fill",                     expectedAmount: null,    chargeDay: null, method: "Amex" },
   { name: "Netflix",                         expectedAmount: 17.99,   chargeDay: 30,   method: "Amex" },
@@ -270,7 +270,9 @@ function App() {
         if (expectedAmt && Math.abs(tx.amount - expectedAmt) > 0.50) {
           discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(tx.amount)}`);
         }
-        matched.push({ ...tx, vendor, discrepancies });
+        const notes = [];
+        if (vendor?.optional) notes.push("Note: may apply to prior month's statement");
+        matched.push({ ...tx, vendor, discrepancies, notes });
         matchedNames.add(tx.vendorMatch);
       } else {
         unmatched.push(tx);
@@ -278,6 +280,7 @@ function App() {
     }
     const miss = accountVendors.filter(v => {
       if (matchedNames.has(v.name)) return false;
+      if (v.optional) return false; // optional vendors never flagged as missing
       const liveV = sheetVendors ? sheetVendors.find(s => s.name.toLowerCase() === v.name.toLowerCase()) : null;
       const amt = liveV?.expectedAmount ?? v.expectedAmount;
       return amt != null;
@@ -508,7 +511,7 @@ function App() {
             </div>
             {matches.length > 0 && (
               <Section title="✅ Confirmed Payments" color="#4a7c59">
-                {matches.map((m, i) => <Row key={i} label={m.vendorMatch} amount={fmt(m.amount)} date={m.date} note={m.discrepancies.length > 0 ? m.discrepancies.join("; ") : null} noteColor="#c9a04a" warn={m.discrepancies.length > 0} />)}
+                {matches.map((m, i) => <Row key={i} label={m.vendorMatch} amount={fmt(m.amount)} date={m.date} note={m.discrepancies.length > 0 ? m.discrepancies.join("; ") : (m.notes?.length > 0 ? m.notes.join("; ") : null)} noteColor={m.discrepancies.length > 0 ? "#c9a04a" : "#557a66"} warn={m.discrepancies.length > 0} />)}
               </Section>
             )}
             {missing.length > 0 && (
