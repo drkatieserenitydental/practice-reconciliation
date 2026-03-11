@@ -265,9 +265,11 @@ function App() {
         const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
         const liveVendor = sheetVendors ? sheetVendors.find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
         const expectedAmt = liveVendor?.expectedAmount ?? vendor?.expectedAmount;
-        // Special case: Cloud — only track the monthly membership fee (~$117), ignore service fees
-        if (tx.vendorMatch === "Cloud" && expectedAmt) {
-          if (Math.abs(tx.amount - expectedAmt) > 10) {
+        // Special case: Cloud — membership fee is "CloudDentistry", service fee is "clouddentistry.com"
+        // Only track the membership fee, ignore service fees
+        if (tx.vendorMatch === "Cloud") {
+          const desc = tx.description || "";
+          if (desc.toLowerCase().includes("clouddentistry.com") || !desc.toLowerCase().includes("clouddentistry")) {
             unmatched.push({ ...tx, description: tx.description + " [Cloud service fee — not tracked]" });
             continue;
           }
