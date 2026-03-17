@@ -353,6 +353,13 @@ function App() {
     const dateColIdx = 11 + monthIdx * 2;
     const col = (i) => i < 26 ? String.fromCharCode(65 + i) : "A" + String.fromCharCode(65 + i - 26);
     try {
+      // Get the real sheetId for the first tab
+      const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties`, {
+        headers: { "Authorization": `Bearer ${sheetsToken}` }
+      });
+      const metaJson = await metaRes.json();
+      const sheetId = metaJson.sheets?.[0]?.properties?.sheetId ?? 0;
+
       const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:A100`, {
         headers: { "Authorization": `Bearer ${sheetsToken}` }
       });
@@ -393,14 +400,14 @@ function App() {
           const rowIndex = found.row - 1;
           colorRequests.push({
             repeatCell: {
-              range: { sheetId: 0, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: amountColIdx, endColumnIndex: amountColIdx + 1 },
+              range: { sheetId: sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: amountColIdx, endColumnIndex: amountColIdx + 1 },
               cell: { userEnteredFormat: { backgroundColor: orangeColor } },
               fields: "userEnteredFormat.backgroundColor"
             }
           });
           colorRequests.push({
             repeatCell: {
-              range: { sheetId: 0, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: dateColIdx, endColumnIndex: dateColIdx + 1 },
+              range: { sheetId: sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: dateColIdx, endColumnIndex: dateColIdx + 1 },
               cell: { userEnteredFormat: { backgroundColor: orangeColor } },
               fields: "userEnteredFormat.backgroundColor"
             }
