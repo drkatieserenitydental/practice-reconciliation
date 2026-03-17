@@ -413,11 +413,15 @@ function App() {
             }
           });
         }
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`, {
+        const colorRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({ requests: colorRequests })
         });
+        const colorJson = await colorRes.json();
+        console.log("sheetId used:", sheetId);
+        console.log("colorRequests:", JSON.stringify(colorRequests));
+        console.log("color response:", JSON.stringify(colorJson));
       }
       setSheetStatus("success");
     } catch (e) {
