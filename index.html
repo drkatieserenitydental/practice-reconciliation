@@ -172,8 +172,8 @@ function App() {
   }
 
   function reReconcile(liveVendors) {
-    // Re-evaluate discrepancies using live sheet amounts
-    setMatches(prev => prev.map(m => {
+    // Re-evaluate discrepancies using live sheet amounts for both accounts
+    const recalc = (m) => {
       const liveV = liveVendors.find(v => v.name.toLowerCase() === (m.vendorMatch || "").toLowerCase());
       const expectedAmt = liveV?.expectedAmount ?? m.vendor?.expectedAmount;
       const discrepancies = [];
@@ -181,32 +181,10 @@ function App() {
         discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
       }
       return { ...m, discrepancies };
-    }));
-    // Also update boaResults and amexResults
-    setBoaResults(prev => {
-      if (!prev) return prev;
-      return { ...prev, matches: prev.matches.map(m => {
-        const liveV = liveVendors.find(v => v.name.toLowerCase() === (m.vendorMatch || "").toLowerCase());
-        const expectedAmt = liveV?.expectedAmount ?? m.vendor?.expectedAmount;
-        const discrepancies = [];
-        if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
-          discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
-        }
-        return { ...m, discrepancies };
-      })};
-    });
-    setAmexResults(prev => {
-      if (!prev) return prev;
-      return { ...prev, matches: prev.matches.map(m => {
-        const liveV = liveVendors.find(v => v.name.toLowerCase() === (m.vendorMatch || "").toLowerCase());
-        const expectedAmt = liveV?.expectedAmount ?? m.vendor?.expectedAmount;
-        const discrepancies = [];
-        if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
-          discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
-        }
-        return { ...m, discrepancies };
-      })};
-    });
+    };
+    setMatches(prev => prev.map(recalc));
+    setBoaResults(prev => prev ? { ...prev, matches: prev.matches.map(recalc) } : prev);
+    setAmexResults(prev => prev ? { ...prev, matches: prev.matches.map(recalc) } : prev);
   }
 
   async function parsePDF(pdfFile) {
@@ -383,10 +361,13 @@ function App() {
       const sheetRows = (readJson.values || []).map((row, idx) => ({ name: (row[0] || "").trim(), row: idx + 1 }));
       const updates = [];
       // Write both BoA and Amex results
+      console.log("boaResults:", boaResults);
+      console.log("amexResults:", amexResults);
       const allMatches = [
         ...(boaResults ? boaResults.matches : []),
         ...(amexResults ? amexResults.matches : matches),
       ];
+      console.log("allMatches count:", allMatches.length);
       for (const m of allMatches) {
         if (!m.vendorMatch) continue;
         const found = sheetRows.find(v => v.name.toLowerCase() === m.vendorMatch.toLowerCase());
