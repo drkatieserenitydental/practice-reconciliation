@@ -177,7 +177,7 @@ function App() {
       const liveV = liveVendors.find(v => v.name.toLowerCase() === (m.vendorMatch || "").toLowerCase());
       const expectedAmt = liveV?.expectedAmount ?? m.vendor?.expectedAmount;
       const discrepancies = [];
-      if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
+      if (expectedAmt && !m.vendor?.optional && Math.abs(m.amount - expectedAmt) > 0.50) {
         discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
       }
       return { ...m, discrepancies };
