@@ -382,7 +382,13 @@ function App() {
       if (readJson.error) throw new Error("Could not read sheet: " + readJson.error.message);
       const sheetRows = (readJson.values || []).map((row, idx) => ({ name: (row[0] || "").trim(), row: idx + 1 }));
       const updates = [];
-      for (const m of matches) {
+      // Write both BoA and Amex results
+      const allMatches = [
+        ...(boaResults ? boaResults.matches : []),
+        ...(amexResults ? amexResults.matches : matches),
+      ];
+      for (const m of allMatches) {
+        if (!m.vendorMatch) continue;
         const found = sheetRows.find(v => v.name.toLowerCase() === m.vendorMatch.toLowerCase());
         if (!found) continue;
         updates.push({ range: `${col(amountColIdx)}${found.row}`, values: [[m.amount]] });
