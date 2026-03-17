@@ -361,13 +361,10 @@ function App() {
       const sheetRows = (readJson.values || []).map((row, idx) => ({ name: (row[0] || "").trim(), row: idx + 1 }));
       const updates = [];
       // Write both BoA and Amex results
-      console.log("boaResults:", boaResults);
-      console.log("amexResults:", amexResults);
       const allMatches = [
         ...(boaResults ? boaResults.matches : []),
         ...(amexResults ? amexResults.matches : matches),
       ];
-      console.log("allMatches count:", allMatches.length);
       for (const m of allMatches) {
         if (!m.vendorMatch) continue;
         const found = sheetRows.find(v => v.name.toLowerCase() === m.vendorMatch.toLowerCase());
@@ -383,6 +380,38 @@ function App() {
       });
       const writeJson = await writeRes.json();
       if (writeJson.error) throw new Error(writeJson.error.message);
+
+      // Apply orange background to discrepancy cells
+      const discrepantMatches = allMatches.filter(m => m.discrepancies && m.discrepancies.length > 0 && m.vendorMatch);
+      if (discrepantMatches.length > 0) {
+        const colorRequests = [];
+        const orangeColor = { red: 1.0, green: 0.6, blue: 0.2 };
+        for (const m of discrepantMatches) {
+          const found = sheetRows.find(v => v.name.toLowerCase() === m.vendorMatch.toLowerCase());
+          if (!found) continue;
+          // rowIndex is 0-based in batchUpdate
+          const rowIndex = found.row - 1;
+          colorRequests.push({
+            repeatCell: {
+              range: { sheetId: 0, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: amountColIdx, endColumnIndex: amountColIdx + 1 },
+              cell: { userEnteredFormat: { backgroundColor: orangeColor } },
+              fields: "userEnteredFormat.backgroundColor"
+            }
+          });
+          colorRequests.push({
+            repeatCell: {
+              range: { sheetId: 0, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: dateColIdx, endColumnIndex: dateColIdx + 1 },
+              cell: { userEnteredFormat: { backgroundColor: orangeColor } },
+              fields: "userEnteredFormat.backgroundColor"
+            }
+          });
+        }
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ requests: colorRequests })
+        });
+      }
       setSheetStatus("success");
     } catch (e) {
       setSheetStatus("error: " + e.message);
