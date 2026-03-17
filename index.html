@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Practice Reconciliation v2</title>
+  <title>Practice Reconciliation</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -412,11 +412,16 @@ function App() {
             }
           });
         }
+        const colorPayload = { requests: colorRequests };
+        console.log("Sending color payload:", JSON.stringify(colorPayload));
         const colorRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ requests: colorRequests })
+          body: JSON.stringify(colorPayload)
         });
+        const colorJson = await colorRes.json();
+        console.log("Color response status:", colorRes.status);
+        console.log("Color response:", JSON.stringify(colorJson));
         const colorJson = await colorRes.json();
       }
       setSheetStatus("success");
