@@ -30,7 +30,7 @@ const MONTH_LABELS = ["Jan '26","Feb '26","Mar '26","Apr '26","May '26","Jun '26
 
 const VENDORS = [
   { name: "EverBank Loan",                  expectedAmount: 689.32,  chargeDay: 1,    method: "BoA" },
-  { name: "WealthFD",                        expectedAmount: 1000.00, chargeDay: 1,    method: "BoA" },
+  { name: "WealthFD",                        expectedAmount: 1000.00, chargeDay: 1,    method: "BoA", aliases: ["TaxFD", "Wealth FD", "Tax FD"] },
   { name: "Protective Life Insurance",       expectedAmount: 7.70,    chargeDay: null, method: "BoA" },
   { name: "Hanover",                         expectedAmount: 250.06,  chargeDay: 11,   method: "BoA" },
   { name: "Amex CC",                         expectedAmount: null,    chargeDay: 13,   method: "BoA" },
@@ -218,10 +218,13 @@ function App() {
       if (!pdfText || pdfText.trim().length < 50) throw new Error("Could not extract text from PDF.");
 
       const vendorList = VENDORS.filter(v => v.method === account)
-        .map(v => `${v.name}|expected:${v.expectedAmount ? fmt(v.expectedAmount) : "variable"}`)
+        .map(v => {
+          const aliases = v.aliases ? ` (also known as: ${v.aliases.join(", ")})` : "";
+          return `${v.name}${aliases}|expected:${v.expectedAmount ? fmt(v.expectedAmount) : "variable"}`;
+        })
         .join(", ");
 
-      const prompt = `Extract ALL transactions from this bank statement as a JSON array. Each item: {"date":"YYYY-MM-DD","description":"string","amount":number,"vendorMatch":"vendor name or null","matchConfidence":"high|medium|low|none"}. Amount positive=charge, negative=credit. Match vendorMatch ONLY to: ${vendorList}. Return ONLY the JSON array.\n\n${pdfText}`;
+      const prompt = `Extract ALL transactions from this bank statement as a JSON array. Each item: {"date":"YYYY-MM-DD","description":"string","amount":number,"vendorMatch":"vendor name or null","matchConfidence":"high|medium|low|none"}. Amount positive=charge, negative=credit. Match vendorMatch ONLY to vendors in this list: ${vendorList}. IMPORTANT: Some vendors have aliases in parentheses — if a transaction description matches an alias, use the PRIMARY vendor name as vendorMatch. Return ONLY the JSON array.\n\n${pdfText}`;
 
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -262,7 +265,12 @@ function App() {
     for (const tx of txns) {
       if (tx.amount <= 0) continue;
       if (tx.vendorMatch && tx.matchConfidence !== "none") {
-        const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
+        const vendor = accountVendors.find(v =>
+          v.name === tx.vendorMatch ||
+          (v.aliases && v.aliases.some(a => a.toLowerCase() === (tx.vendorMatch || "").toLowerCase()))
+        );
+        // Normalize vendorMatch to canonical name
+        if (vendor && tx.vendorMatch !== vendor.name) tx = { ...tx, vendorMatch: vendor.name };
         const liveVendor = (liveVendors || sheetVendors) ? (liveVendors || sheetVendors).find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
         const expectedAmt = liveVendor?.expectedAmount ?? vendor?.expectedAmount;
         // Special case: Cloud — membership fee is "CloudDentistry", service fee is "clouddentistry.com"
