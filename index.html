@@ -494,20 +494,20 @@ function App() {
         {apiKeySet && step === "upload" && (
           <div>
             <div style={{ marginBottom: "32px" }}>
-              <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 1 of 3</div>
-              <div style={{ fontSize: "28px", marginBottom: "6px" }}>Upload Bank Statement</div>
-              <div style={{ color: "#666", fontSize: "14px" }}>PDF export from {account === "BoA" ? "Bank of America" : "American Express"}</div>
+              <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>
+                {account === "BoA" ? "Step 1 of 4" : "Step 3 of 4"}
+              </div>
+              <div style={{ fontSize: "28px", marginBottom: "6px" }}>
+                {account === "BoA" ? "Upload BoA Statement" : "Upload Amex Statement"}
+              </div>
+              <div style={{ color: "#666", fontSize: "14px" }}>
+                {account === "BoA" ? "PDF export from Bank of America" : "PDF export from American Express"}
+              </div>
             </div>
             <div style={{ display: "flex", gap: "16px", marginBottom: "28px" }}>
               <div style={{ flex: 1 }}><span style={label}>Statement Month</span>
                 <select value={month} onChange={e => setMonth(e.target.value)} style={sel}>
                   {MONTH_LABELS.map(m => <option key={m}>{m}</option>)}
-                </select>
-              </div>
-              <div style={{ flex: 1 }}><span style={label}>Account</span>
-                <select value={account} onChange={e => setAccount(e.target.value)} style={sel}>
-                  <option value="BoA">BoA Expense</option>
-                  <option value="Amex">American Express</option>
                 </select>
               </div>
             </div>
@@ -563,13 +563,18 @@ function App() {
           <div>
             <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
               <div>
-                <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 2 of 3</div>
+                <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>
+                {account === "BoA" ? "Step 2 of 4" : "Step 4 of 4"}
+              </div>
                 <div style={{ fontSize: "28px" }}>Reconciliation — {month} ({account})</div>
                 <div style={{ fontSize: "12px", marginTop: "6px", color: sheetVendors ? "#4a7c59" : "#666" }}>
                   {sheetVendors ? `✓ Using live amounts from your Google Sheet` : `Using hardcoded amounts — sign in on Step 3 to sync`}
                 </div>
               </div>
-              <button onClick={() => setStep("sheet")} style={B("#c9b97a", "#0f0f0f")}>Update Google Sheet →</button>
+              {account === "BoA"
+                ? <button onClick={() => { setAccount("Amex"); setFile(null); setMatches([]); setUnmatched([]); setMissing([]); setStep("upload"); }} style={B("#c9b97a", "#0f0f0f")}>Next: Upload Amex Statement →</button>
+                : <button onClick={() => setStep("sheet")} style={B("#c9b97a", "#0f0f0f")}>Update Google Sheet →</button>
+              }
             </div>
             <div style={{ display: "flex", gap: "12px", marginBottom: "28px" }}>
               {[
@@ -606,7 +611,7 @@ function App() {
         {apiKeySet && step === "sheet" && (
           <div>
             <div style={{ marginBottom: "32px" }}>
-              <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 3 of 3</div>
+              <div style={{ fontSize: "13px", color: "#888", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "8px" }}>Step 3 of 4</div>
               <div style={{ fontSize: "28px", marginBottom: "6px" }}>Update Google Sheet</div>
               <div style={{ color: "#666", fontSize: "14px" }}>Sign in with Google to write to your spreadsheet</div>
             </div>
@@ -626,11 +631,7 @@ function App() {
                   <div>
                     <Msg color="#4a7c59">✅ {account} sheet updated!</Msg>
                     <div style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
-                      {account === "BoA" && !amexResults && (
-                        <button onClick={() => { setAccount("Amex"); setFile(null); setMatches([]); setUnmatched([]); setMissing([]); setSheetStatus(null); setStep("upload"); }} style={B("#4a6a8a", "#fff")}>
-                          + Add Amex Statement →
-                        </button>
-                      )}
+
                       <button onClick={() => setStep("email")} style={B("#4a7c59", "#fff")}>
                         {amexResults || account === "Amex" ? "Generate & Send Email →" : "Skip Amex → Email"}
                       </button>
