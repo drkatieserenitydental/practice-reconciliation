@@ -286,18 +286,34 @@ function App() {
         unmatched.push(tx);
       }
     }
+    // Special case: Pittman — reassign multiple matches correctly
+    // If 1 match: assign to Benson. If 2 matches: higher = Benson, lower = Plaisance.
+    const pittmanMatches = matched.filter(m => m.vendorMatch && m.vendorMatch.toLowerCase().includes("pittman"));
+    const nonPittman = matched.filter(m => !m.vendorMatch || !m.vendorMatch.toLowerCase().includes("pittman"));
+    if (pittmanMatches.length === 1) {
+      pittmanMatches[0] = { ...pittmanMatches[0], vendorMatch: "Pittman - Benson" };
+    } else if (pittmanMatches.length >= 2) {
+      const sorted = [...pittmanMatches].sort((a, b) => b.amount - a.amount);
+      sorted[0] = { ...sorted[0], vendorMatch: "Pittman - Benson" };
+      sorted[1] = { ...sorted[1], vendorMatch: "Pittman - Plaisance" };
+      pittmanMatches.length = 0;
+      pittmanMatches.push(...sorted.slice(0, 2));
+    }
+    const finalMatched = [...nonPittman, ...pittmanMatches];
+    const finalMatchedNames = new Set(finalMatched.map(m => m.vendorMatch).filter(Boolean));
+
     const activeLiveVendors = liveVendors || sheetVendors;
     const miss = accountVendors.filter(v => {
-      if (matchedNames.has(v.name)) return false;
+      if (finalMatchedNames.has(v.name) || matchedNames.has(v.name)) return false;
       if (v.optional) return false;
       const liveV = activeLiveVendors ? activeLiveVendors.find(s => s.name.toLowerCase() === v.name.toLowerCase()) : null;
       const amt = liveV?.expectedAmount ?? v.expectedAmount;
       return amt != null;
     });
-    setMatches(matched);
+    setMatches(finalMatched);
     setUnmatched(unmatched);
     setMissing(miss);
-    const results = { matches: matched, unmatched, missing: miss, account };
+    const results = { matches: finalMatched, unmatched, missing: miss, account };
     if (account === "BoA") setBoaResults(results);
     else setAmexResults(results);
   }
