@@ -390,6 +390,8 @@ function App() {
 
       // Apply orange background to discrepancy cells
       const discrepantMatches = allMatches.filter(m => m.discrepancies && m.discrepancies.length > 0 && m.vendorMatch);
+      console.log("allMatches:", allMatches.map(m => ({name: m.vendorMatch, disc: m.discrepancies})));
+      console.log("discrepantMatches:", discrepantMatches.map(m => m.vendorMatch));
       if (discrepantMatches.length > 0) {
         const colorRequests = [];
         const orangeColor = { red: 1.0, green: 0.6, blue: 0.2 };
