@@ -260,6 +260,24 @@ function App() {
 
   function reconcile(txns, liveVendors) {
     const accountVendors = VENDORS.filter(v => v.method === account);
+    // Force alias matching — override AI vendorMatch based on description keywords
+    const aliasMap = VENDORS.filter(v => v.aliases).flatMap(v =>
+      v.aliases.map(alias => ({ alias: alias.toLowerCase(), name: v.name }))
+    );
+    txns = txns.map(tx => {
+      if (tx.vendorMatch) return tx; // already matched
+      const desc = (tx.description || "").toLowerCase();
+      const aliasHit = aliasMap.find(a => desc.includes(a.alias));
+      if (aliasHit) return { ...tx, vendorMatch: aliasHit.name, matchConfidence: "high" };
+      return tx;
+    });
+    // Also fix already-matched transactions where AI used wrong name
+    txns = txns.map(tx => {
+      const desc = (tx.description || "").toLowerCase();
+      const aliasHit = aliasMap.find(a => desc.includes(a.alias));
+      if (aliasHit) return { ...tx, vendorMatch: aliasHit.name, matchConfidence: "high" };
+      return tx;
+    });
     const matched = [], unmatched = [];
     const matchedNames = new Set();
     for (const tx of txns) {
@@ -294,6 +312,30 @@ function App() {
         unmatched.push(tx);
       }
     }
+    // Post-process: resolve aliases that the AI missed
+    // For each vendor with aliases, scan unmatched transactions and force-match
+    const stillUnmatched = [];
+    for (const tx of unmatched) {
+      const desc = (tx.description || "").toLowerCase();
+      const aliasVendor = accountVendors.find(v =>
+        v.aliases && v.aliases.some(a => desc.includes(a.toLowerCase()))
+      );
+      if (aliasVendor) {
+        const liveVendor = (liveVendors || sheetVendors) ? (liveVendors || sheetVendors).find(v => v.name.toLowerCase() === aliasVendor.name.toLowerCase()) : null;
+        const expectedAmt = liveVendor?.expectedAmount ?? aliasVendor?.expectedAmount;
+        const discrepancies = [];
+        if (expectedAmt && Math.abs(tx.amount - expectedAmt) > 0.50) {
+          discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(tx.amount)}`);
+        }
+        matched.push({ ...tx, vendorMatch: aliasVendor.name, vendor: aliasVendor, discrepancies, notes: [] });
+        matchedNames.add(aliasVendor.name);
+      } else {
+        stillUnmatched.push(tx);
+      }
+    }
+    unmatched.length = 0;
+    unmatched.push(...stillUnmatched);
+
     // Special case: Pittman — reassign multiple matches correctly
     // If 1 match: assign to Benson. If 2 matches: higher = Benson, lower = Plaisance.
     const pittmanMatches = matched.filter(m => m.vendorMatch && m.vendorMatch.toLowerCase().includes("pittman"));
