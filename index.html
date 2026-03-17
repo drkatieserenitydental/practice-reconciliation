@@ -348,6 +348,8 @@ function App() {
 
   async function writeToSheets() {
     setSheetStatus("loading");
+    console.log("BoA matches:", boaResults?.matches?.map(m => ({name: m.vendorMatch, disc: m.discrepancies?.length})));
+    console.log("Amex matches:", amexResults?.matches?.map(m => ({name: m.vendorMatch, disc: m.discrepancies?.length})));
     const monthIdx = MONTH_LABELS.indexOf(month);
     const amountColIdx = 10 + monthIdx * 2;
     const dateColIdx = 11 + monthIdx * 2;
