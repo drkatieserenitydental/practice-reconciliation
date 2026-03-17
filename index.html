@@ -390,28 +390,25 @@ function App() {
 
       // Apply orange background to discrepancy cells
       const discrepantMatches = allMatches.filter(m => m.discrepancies && m.discrepancies.length > 0 && m.vendorMatch);
-      console.log("allMatches:", allMatches.map(m => ({name: m.vendorMatch, disc: m.discrepancies})));
-      console.log("discrepantMatches:", discrepantMatches.map(m => m.vendorMatch));
       if (discrepantMatches.length > 0) {
         const colorRequests = [];
-        const orangeColor = { red: 1.0, green: 0.6, blue: 0.2 };
+        const redText = { red: 0.8, green: 0.1, blue: 0.1 };
         for (const m of discrepantMatches) {
           const found = sheetRows.find(v => v.name.toLowerCase() === m.vendorMatch.toLowerCase());
           if (!found) continue;
-          // rowIndex is 0-based in batchUpdate
           const rowIndex = found.row - 1;
           colorRequests.push({
             repeatCell: {
               range: { sheetId: sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: amountColIdx, endColumnIndex: amountColIdx + 1 },
-              cell: { userEnteredFormat: { backgroundColor: orangeColor } },
-              fields: "userEnteredFormat.backgroundColor"
+              cell: { userEnteredFormat: { textFormat: { foregroundColor: redText, bold: true } } },
+              fields: "userEnteredFormat.textFormat"
             }
           });
           colorRequests.push({
             repeatCell: {
               range: { sheetId: sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: dateColIdx, endColumnIndex: dateColIdx + 1 },
-              cell: { userEnteredFormat: { backgroundColor: orangeColor } },
-              fields: "userEnteredFormat.backgroundColor"
+              cell: { userEnteredFormat: { textFormat: { foregroundColor: redText, bold: true } } },
+              fields: "userEnteredFormat.textFormat"
             }
           });
         }
@@ -421,9 +418,6 @@ function App() {
           body: JSON.stringify({ requests: colorRequests })
         });
         const colorJson = await colorRes.json();
-        console.log("sheetId used:", sheetId);
-        console.log("colorRequests:", JSON.stringify(colorRequests));
-        console.log("color response:", JSON.stringify(colorJson));
       }
       setSheetStatus("success");
     } catch (e) {
