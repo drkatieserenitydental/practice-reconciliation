@@ -462,7 +462,7 @@ function App() {
   async function sendGmail() {
     setGmailStatus("loading");
     const body = buildEmail();
-    const raw = [`To: me`, `Subject: Reconciliation ${month}`, `Content-Type: text/plain; charset=utf-8`, ``, body].join("\n");
+    const raw = [`To: drkatie@serenitydentalga.com`, `Subject: Reconciliation ${month}`, `Content-Type: text/plain; charset=utf-8`, `MIME-Version: 1.0`, ``, body].join("\n");
     const encoded = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     try {
       const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
