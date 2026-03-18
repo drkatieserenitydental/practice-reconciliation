@@ -366,7 +366,6 @@ function App() {
         || allSheets.find(s => !s.properties.hidden)
         || allSheets[0];
       const sheetId = targetSheet?.properties?.sheetId ?? 0;
-      console.log("Using sheet:", targetSheet?.properties?.title, "sheetId:", sheetId);
 
       const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:A100`, {
         headers: { "Authorization": `Bearer ${sheetsToken}` }
@@ -421,15 +420,12 @@ function App() {
           });
         }
         const colorPayload = { requests: colorRequests };
-        console.log("Sending color payload:", JSON.stringify(colorPayload));
         const colorRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${sheetsToken}`, "Content-Type": "application/json" },
           body: JSON.stringify(colorPayload)
         });
         const colorJson = await colorRes.json();
-        console.log("Color response status:", colorRes.status);
-        console.log("Color response:", JSON.stringify(colorJson));
       }
       setSheetStatus("success");
     } catch (e) {
