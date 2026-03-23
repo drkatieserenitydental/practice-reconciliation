@@ -12,7 +12,7 @@ const client = new PlaidApi(new Configuration({
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -23,6 +23,7 @@ module.exports = async (req, res) => {
       products: ["transactions"],
       country_codes: ["US"],
       language: "en",
+      redirect_uri: "https://practice-reconciliation.vercel.app",
     });
     res.json({ link_token: response.data.link_token });
   } catch (e) {
