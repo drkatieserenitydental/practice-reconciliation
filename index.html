@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0f0f0f; color: #e8e3d5; font-family: Georgia, 'Times New Roman', serif; }
@@ -138,6 +139,9 @@ function App() {
   const [dragOver, setDragOver] = useState(false);
   const [sheetVendors, setSheetVendors] = useState(null); // {name, expectedAmount} from live sheet
   const [boaResults, setBoaResults] = useState(null);
+  const [boaAccessToken, setBoaAccessToken] = useState(null);
+  const [amexAccessToken, setAmexAccessToken] = useState(null);
+  const [plaidConnecting, setPlaidConnecting] = useState(false);
   const [amexResults, setAmexResults] = useState(null);
 
   function signInWithGoogle() {
@@ -185,6 +189,116 @@ function App() {
     setMatches(prev => prev.map(recalc));
     setBoaResults(prev => prev ? { ...prev, matches: prev.matches.map(recalc) } : prev);
     setAmexResults(prev => prev ? { ...prev, matches: prev.matches.map(recalc) } : prev);
+  }
+
+  const VERCEL_URL = "https://practice-reconciliation.vercel.app";
+
+  async function connectPlaid(accountType) {
+    setPlaidConnecting(true);
+    setError(null);
+    try {
+      // Get link token from backend
+      const res = await fetch(`${VERCEL_URL}/api/create-link-token`);
+      const { link_token, error } = await res.json();
+      if (error) throw new Error(error);
+
+      // Open Plaid Link
+      const handler = window.Plaid.create({
+        token: link_token,
+        onSuccess: async (public_token, metadata) => {
+          try {
+            // Exchange for access token
+            const exchangeRes = await fetch(`${VERCEL_URL}/api/exchange-token`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ public_token, account_name: accountType })
+            });
+            const { access_token } = await exchangeRes.json();
+            if (accountType === "BoA") setBoaAccessToken(access_token);
+            else setAmexAccessToken(access_token);
+            setPlaidConnecting(false);
+          } catch (e) {
+            setError("Failed to exchange token: " + e.message);
+            setPlaidConnecting(false);
+          }
+        },
+        onExit: () => setPlaidConnecting(false),
+      });
+      handler.open();
+    } catch (e) {
+      setError("Failed to connect: " + e.message);
+      setPlaidConnecting(false);
+    }
+  }
+
+  async function fetchPlaidTransactions(accessToken) {
+    setStep("parsing");
+    setError(null);
+    try {
+      // Get date range for selected month
+      const monthIdx = MONTH_LABELS.indexOf(month);
+      const year = 2026;
+      const startDate = `${year}-${String(monthIdx + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, monthIdx + 1, 0).getDate();
+      const endDate = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${lastDay}`;
+
+      const res = await fetch(`${VERCEL_URL}/api/get-transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: accessToken, start_date: startDate, end_date: endDate })
+      });
+      const { transactions, error } = await res.json();
+      if (error) throw new Error(error);
+
+      // Convert Plaid transactions to our format
+      const converted = transactions.map(tx => ({
+        date: tx.date,
+        description: tx.name,
+        amount: tx.amount, // Plaid: positive = debit
+        vendorMatch: null,
+        matchConfidence: "none"
+      }));
+
+      // Use Claude to match vendors
+      const vendorList = VENDORS.filter(v => v.method === account)
+        .map(v => {
+          const aliases = v.aliases ? ` (also known as: ${v.aliases.join(", ")})` : "";
+          return `${v.name}${aliases}`;
+        }).join(", ");
+
+      const prompt = `Match these bank transactions to vendors. For each transaction return a JSON array with: {"date":"YYYY-MM-DD","description":"string","amount":number,"vendorMatch":"vendor name or null","matchConfidence":"high|medium|low|none"}. Match vendorMatch ONLY to: ${vendorList}. IMPORTANT: Some vendors have aliases — use the primary name. Return ONLY the JSON array.
+
+Transactions:
+${JSON.stringify(converted, null, 2)}`;
+
+      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 8000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      const aiData = await aiRes.json();
+      if (aiData.error) throw new Error(aiData.error.message);
+      const raw = aiData.content.map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
+      const start = raw.indexOf("[");
+      const end = raw.lastIndexOf("]");
+      if (start === -1 || end === -1) throw new Error("No JSON array in response");
+      const parsed = JSON.parse(raw.substring(start, end + 1));
+      reconcile(parsed, sheetVendors);
+      setStep("review");
+    } catch (e) {
+      setError("Failed to fetch transactions: " + e.message);
+      setStep("upload");
+    }
   }
 
   async function parsePDF(pdfFile) {
@@ -532,7 +646,7 @@ function App() {
                 {account === "BoA" ? "Upload BoA Statement" : "Upload Amex Statement"}
               </div>
               <div style={{ color: "#666", fontSize: "14px" }}>
-                {account === "BoA" ? "PDF export from Bank of America" : "PDF export from American Express"}
+                {account === "BoA" ? "Connect Bank of America or upload PDF statement" : "Connect American Express or upload PDF statement"}
               </div>
             </div>
             <div style={{ display: "flex", gap: "16px", marginBottom: "28px" }}>
@@ -542,6 +656,30 @@ function App() {
                 </select>
               </div>
             </div>
+            {/* Plaid Connect Option */}
+            <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px 24px", marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: "14px", color: "#e8e3d5", marginBottom: "4px" }}>
+                  {account === "BoA" ? (boaAccessToken ? "✓ Bank of America Connected" : "Connect Bank of America") : (amexAccessToken ? "✓ American Express Connected" : "Connect American Express")}
+                </div>
+                <div style={{ fontSize: "12px", color: "#666" }}>Automatically pull transactions — no PDF needed</div>
+              </div>
+              {(account === "BoA" ? !boaAccessToken : !amexAccessToken) && (
+                <button onClick={() => connectPlaid(account)} disabled={plaidConnecting}
+                  style={{ background: "#1a3a5c", color: "#7ab8e8", border: "1px solid #2a5a8c", borderRadius: "4px", padding: "10px 20px", fontSize: "13px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic", whiteSpace: "nowrap" }}>
+                  {plaidConnecting ? "Connecting..." : "Connect via Plaid →"}
+                </button>
+              )}
+              {(account === "BoA" ? boaAccessToken : amexAccessToken) && (
+                <button onClick={() => fetchPlaidTransactions(account === "BoA" ? boaAccessToken : amexAccessToken)}
+                  style={{ background: "#4a7c59", color: "#fff", border: "none", borderRadius: "4px", padding: "10px 20px", fontSize: "13px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic", whiteSpace: "nowrap" }}>
+                  Fetch {month} Transactions →
+                </button>
+              )}
+            </div>
+
+            <div style={{ textAlign: "center", color: "#444", fontSize: "12px", marginBottom: "16px", letterSpacing: "2px" }}>— OR UPLOAD PDF —</div>
+
             <div onDrop={onDrop} onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
               onClick={() => document.getElementById("pdf-input").click()}
               style={{ border: `2px dashed ${dragOver ? "#c9b97a" : file ? "#4a7c59" : "#333"}`, borderRadius: "8px", padding: "60px 40px", textAlign: "center", cursor: "pointer", background: "#141414", marginBottom: "24px" }}>
