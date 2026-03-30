@@ -30,17 +30,17 @@ const SHEET_ID = "141fQX9yQxBToRS-yZHuDzOjD3KKCtRAyObvewDE-mqs";
 const MONTH_LABELS = ["Jan '26","Feb '26","Mar '26","Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26"];
 
 const VENDORS = [
-  { name: "EverBank Loan",                  expectedAmount: 689.32,  chargeDay: 1,    method: "BoA" },
-  { name: "WealthFD",                        expectedAmount: 1000.00, chargeDay: 1,    method: "BoA", aliases: ["TaxFD", "Wealth FD", "Tax FD"] },
-  { name: "Protective Life Insurance",       expectedAmount: 7.70,    chargeDay: null, method: "BoA" },
-  { name: "Hanover",                         expectedAmount: 250.06,  chargeDay: 11,   method: "BoA" },
-  { name: "Amex CC",                         expectedAmount: null,    chargeDay: 13,   method: "BoA" },
-  { name: "Practice Loan (Bank of America)", expectedAmount: 8117.39, chargeDay: 21,   method: "BoA" },
-  { name: "Rent",                            expectedAmount: 7824.34, chargeDay: 21,   method: "BoA", aliases: ["Perimeter Sarbi", "PERIMETER SARBI"] },
-  { name: "Business Disability (Principal)", expectedAmount: 127.31,  chargeDay: 24,   method: "BoA" },
-  { name: "Dr. Benson Loan",                expectedAmount: 1889.41, chargeDay: 30,   method: "BoA", aliases: ["BDG", "Payments and Invoicing payment to BDG"] },
-  { name: "Spectrum Killian - Benson",       expectedAmount: null,    chargeDay: 15,   method: "BoA" },
-  { name: "Spectrum Killian - Plaisance",    expectedAmount: null,    chargeDay: 15,   method: "BoA" },
+  { name: "EverBank Loan",                  expectedAmount: 689.32,  chargeDay: 1,    method: "BoA", aliases: ["everbank", "ever bank", "financeservice", "finance service center"] },
+  { name: "WealthFD",                        expectedAmount: 1000.00, chargeDay: 1,    method: "BoA", aliases: ["TaxFD", "Wealth FD", "Tax FD", "taxfd", "wealthfd"] },
+  { name: "Protective Life Insurance",       expectedAmount: 7.70,    chargeDay: null, method: "BoA", aliases: ["protective life", "protective ins"] },
+  { name: "Hanover",                         expectedAmount: 250.06,  chargeDay: 11,   method: "BoA", aliases: ["hanover ins", "hanover insurance"] },
+  { name: "Amex CC",                         expectedAmount: null,    chargeDay: 13,   method: "BoA", aliases: ["american express payment", "amex payment"] },
+  { name: "Practice Loan (Bank of America)", expectedAmount: 8117.39, chargeDay: 21,   method: "BoA", aliases: ["practice loan", "boa practice"] },
+  { name: "Rent",                            expectedAmount: 7824.34, chargeDay: 21,   method: "BoA", aliases: ["Perimeter Sarbi", "PERIMETER SARBI", "perimeter sarbi"] },
+  { name: "Business Disability (Principal)", expectedAmount: 127.31,  chargeDay: 24,   method: "BoA", aliases: ["principal disability", "business disability principal"] },
+  { name: "Dr. Benson Loan",                expectedAmount: 1889.41, chargeDay: 30,   method: "BoA", aliases: ["BDG", "bdg", "benson loan", "Payments and Invoicing payment to BDG"] },
+  { name: "Spectrum Killian - Benson",       expectedAmount: null,    chargeDay: 15,   method: "BoA", aliases: ["spectrum killian benson", "spectrum benson"] },
+  { name: "Spectrum Killian - Plaisance",    expectedAmount: null,    chargeDay: 15,   method: "BoA", aliases: ["spectrum killian plaisance", "spectrum plaisance", "perimeter sarbi plaisance"] },
   { name: "Carter Dental Solutions",         expectedAmount: 1050.00, chargeDay: 1,    method: "Amex" },
   { name: "Google Business Benson",          expectedAmount: null,    chargeDay: 1,    method: "Amex" },
   { name: "Google Business Serenity",        expectedAmount: null,    chargeDay: 1,    method: "Amex" },
@@ -302,17 +302,16 @@ function App() {
         });
 
         const aiData = await aiRes.json();
-        if (!aiData.error) {
-          const raw = aiData.content.map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
-          const s = raw.indexOf("["), e2 = raw.lastIndexOf("]");
-          if (s !== -1 && e2 !== -1) {
-            const aiMatched = JSON.parse(raw.substring(s, e2 + 1));
-            parsed = ruleMatched.map(tx => {
-              if (tx.vendorMatch) return tx;
-              const hit = aiMatched.find(a => a.description === tx.description && a.date === tx.date);
-              return hit || tx;
-            });
-          }
+        if (aiData.error) throw new Error(aiData.error.message || JSON.stringify(aiData.error));
+        const raw = aiData.content.map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
+        const s = raw.indexOf("["), e2 = raw.lastIndexOf("]");
+        if (s !== -1 && e2 !== -1) {
+          const aiMatched = JSON.parse(raw.substring(s, e2 + 1));
+          parsed = ruleMatched.map(tx => {
+            if (tx.vendorMatch) return tx;
+            const hit = aiMatched.find(a => a.description === tx.description && a.date === tx.date);
+            return hit || tx;
+          });
         }
       }
 
