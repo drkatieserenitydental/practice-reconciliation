@@ -272,12 +272,8 @@ function App() {
             }
           }
         }
-        for (const vendor of accountVendorsForMatch) {
-          const words = vendor.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-          if (words.some(w => desc.includes(w))) {
-            return { ...tx, vendorMatch: vendor.name, matchConfidence: "medium" };
-          }
-        }
+        // Skip rule-based name matching — too many false positives
+        // Let AI handle all non-alias matches
         return tx;
       });
 
