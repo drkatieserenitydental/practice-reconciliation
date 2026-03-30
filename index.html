@@ -259,40 +259,67 @@ function App() {
         matchConfidence: "none"
       }));
 
-      // Use Claude to match vendors
-      const vendorList = VENDORS.filter(v => v.method === account)
-        .map(v => {
-          const aliases = v.aliases ? ` (also known as: ${v.aliases.join(", ")})` : "";
-          return `${v.name}${aliases}`;
-        }).join(", ");
-
-      const prompt = `Match these bank transactions to vendors. For each transaction return a JSON array with: {"date":"YYYY-MM-DD","description":"string","amount":number,"vendorMatch":"vendor name or null","matchConfidence":"high|medium|low|none"}. Match vendorMatch ONLY to: ${vendorList}. IMPORTANT: Some vendors have aliases — use the primary name. Return ONLY the JSON array.
-
-Transactions:
-${JSON.stringify(converted, null, 2)}`;
-
-      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 8000,
-          messages: [{ role: "user", content: prompt }]
-        })
+      // Rule-based matching first (free, no API credits)
+      const accountVendorsForMatch = VENDORS.filter(v => v.method === account);
+      const ruleMatched = converted.map(tx => {
+        const desc = (tx.description || "").toLowerCase();
+        for (const vendor of accountVendorsForMatch) {
+          if (vendor.aliases) {
+            for (const alias of vendor.aliases) {
+              if (desc.includes(alias.toLowerCase())) {
+                return { ...tx, vendorMatch: vendor.name, matchConfidence: "high" };
+              }
+            }
+          }
+        }
+        for (const vendor of accountVendorsForMatch) {
+          const words = vendor.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          if (words.some(w => desc.includes(w))) {
+            return { ...tx, vendorMatch: vendor.name, matchConfidence: "medium" };
+          }
+        }
+        return tx;
       });
 
-      const aiData = await aiRes.json();
-      if (aiData.error) throw new Error(aiData.error.message);
-      const raw = aiData.content.map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
-      const start = raw.indexOf("[");
-      const end = raw.lastIndexOf("]");
-      if (start === -1 || end === -1) throw new Error("No JSON array in response");
-      const parsed = JSON.parse(raw.substring(start, end + 1));
+      // Only send unmatched transactions to AI
+      const unmatchedTxns = ruleMatched.filter(tx => !tx.vendorMatch);
+      let parsed = [...ruleMatched];
+
+      if (unmatchedTxns.length > 0) {
+        const vendorList = accountVendorsForMatch
+          .map(v => {
+            const aliases = v.aliases ? ` (also known as: ${v.aliases.join(", ")})` : "";
+            return `${v.name}${aliases}`;
+          }).join(", ");
+
+        const prompt = `Match these bank transactions to vendors. Return a JSON array with: {"date":"YYYY-MM-DD","description":"string","amount":number,"vendorMatch":"vendor name or null","matchConfidence":"high|medium|low|none"}. Match ONLY to: ${vendorList}. Use primary vendor name for aliases. Return ONLY the JSON array.\n\n${JSON.stringify(unmatchedTxns, null, 2)}`;
+
+        const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 8000, messages: [{ role: "user", content: prompt }] })
+        });
+
+        const aiData = await aiRes.json();
+        if (!aiData.error) {
+          const raw = aiData.content.map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
+          const s = raw.indexOf("["), e2 = raw.lastIndexOf("]");
+          if (s !== -1 && e2 !== -1) {
+            const aiMatched = JSON.parse(raw.substring(s, e2 + 1));
+            parsed = ruleMatched.map(tx => {
+              if (tx.vendorMatch) return tx;
+              const hit = aiMatched.find(a => a.description === tx.description && a.date === tx.date);
+              return hit || tx;
+            });
+          }
+        }
+      }
+
       reconcile(parsed, sheetVendors);
       setStep("review");
     } catch (e) {
@@ -341,8 +368,6 @@ ${JSON.stringify(converted, null, 2)}`;
       const start = raw.indexOf("[");
       const end = raw.lastIndexOf("]");
       if (start === -1 || end === -1) throw new Error("No JSON array in response: " + raw.substring(0, 200));
-      const parsed = JSON.parse(raw.substring(start, end + 1));
-      reconcile(parsed, sheetVendors);
       setStep("review");
     } catch (e) {
       setError("Failed to parse statement: " + e.message);
