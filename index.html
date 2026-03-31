@@ -436,7 +436,7 @@ function App() {
         const liveVendor = (liveVendors || sheetVendors) ? (liveVendors || sheetVendors).find(v => v.name.toLowerCase() === aliasVendor.name.toLowerCase()) : null;
         const expectedAmt = liveVendor?.expectedAmount ?? aliasVendor?.expectedAmount;
         const discrepancies = [];
-        if (expectedAmt && !vendor?.optional && Math.abs(tx.amount - expectedAmt) > 0.50) {
+        if (expectedAmt && !aliasVendor?.optional && Math.abs(tx.amount - expectedAmt) > 0.50) {
           discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(tx.amount)}`);
         }
         matched.push({ ...tx, vendorMatch: aliasVendor.name, vendor: aliasVendor, discrepancies, notes: [] });
