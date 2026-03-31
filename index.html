@@ -372,121 +372,92 @@ function App() {
 
   function reconcile(txns, liveVendors) {
     const accountVendors = VENDORS.filter(v => v.method === account);
-    // Force alias matching — override AI vendorMatch based on description keywords
+    const activeLive = liveVendors || sheetVendors;
+
+    // Build alias map for all vendors
     const aliasMap = VENDORS.filter(v => v.aliases).flatMap(v =>
       v.aliases.map(alias => ({ alias: alias.toLowerCase(), name: v.name }))
     );
-    txns = txns.map(tx => {
-      if (tx.vendorMatch) return tx; // already matched
-      const desc = (tx.description || "").toLowerCase();
-      const aliasHit = aliasMap.find(a => desc.includes(a.alias));
-      if (aliasHit) return { ...tx, vendorMatch: aliasHit.name, matchConfidence: "high" };
-      return tx;
-    });
-    // Also fix already-matched transactions where AI used wrong name
+
+    // Force alias matches on every transaction (overrides AI)
     txns = txns.map(tx => {
       const desc = (tx.description || "").toLowerCase();
-      const aliasHit = aliasMap.find(a => desc.includes(a.alias));
-      if (aliasHit) return { ...tx, vendorMatch: aliasHit.name, matchConfidence: "high" };
+      const hit = aliasMap.find(a => desc.includes(a.alias));
+      if (hit) return { ...tx, vendorMatch: hit.name, matchConfidence: "high" };
       return tx;
     });
+
+    // Separate matched from unmatched
     const matched = [], unmatched = [];
     const matchedNames = new Set();
-    for (const tx of txns) {
+
+    for (let tx of txns) {
       if (tx.amount <= 0) continue;
-      if (tx.vendorMatch && tx.matchConfidence !== "none") {
-        const vendor = accountVendors.find(v =>
-          v.name === tx.vendorMatch ||
-          (v.aliases && v.aliases.some(a => a.toLowerCase() === (tx.vendorMatch || "").toLowerCase()))
-        );
-        // Normalize vendorMatch to canonical name
-        if (vendor && tx.vendorMatch !== vendor.name) tx = { ...tx, vendorMatch: vendor.name };
-        const liveVendor = (liveVendors || sheetVendors) ? (liveVendors || sheetVendors).find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
-        const expectedAmt = liveVendor?.expectedAmount ?? vendor?.expectedAmount;
-        // Special case: Cloud — membership fee is "CloudDentistry", service fee is "clouddentistry.com"
-        // Only track the membership fee, ignore service fees
-        if (tx.vendorMatch === "Cloud") {
-          const desc = tx.description || "";
-          if (desc.toLowerCase().includes("clouddentistry.com") || !desc.toLowerCase().includes("clouddentistry")) {
-            unmatched.push({ ...tx, description: tx.description + " [Cloud service fee — not tracked]" });
-            continue;
-          }
+
+      // Cloud: only track CloudDentistry membership, not clouddentistry.com service fees
+      if (tx.vendorMatch === "Cloud") {
+        const desc = (tx.description || "").toLowerCase();
+        if (desc.includes("clouddentistry.com") || !desc.includes("clouddentistry")) {
+          unmatched.push({ ...tx, description: tx.description + " [Cloud service fee — not tracked]" });
+          continue;
         }
+      }
+
+      if (tx.vendorMatch && tx.matchConfidence !== "none") {
+        const vendor = accountVendors.find(v => v.name === tx.vendorMatch);
+        const liveV = activeLive ? activeLive.find(v => v.name.toLowerCase() === tx.vendorMatch.toLowerCase()) : null;
+        const expectedAmt = liveV?.expectedAmount ?? vendor?.expectedAmount;
         const discrepancies = [];
         if (expectedAmt && !vendor?.optional && Math.abs(tx.amount - expectedAmt) > 0.50) {
           discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(tx.amount)}`);
         }
-        const notes = [];
-        if (vendor?.optional) notes.push("Note: may apply to prior month's statement");
+        const notes = vendor?.optional ? ["Note: may apply to prior month's statement"] : [];
         matched.push({ ...tx, vendor, discrepancies, notes });
         matchedNames.add(tx.vendorMatch);
       } else {
         unmatched.push(tx);
       }
     }
-    // Post-process: resolve aliases that the AI missed
-    // For each vendor with aliases, scan unmatched transactions and force-match
-    const stillUnmatched = [];
-    for (const tx of unmatched) {
-      const desc = (tx.description || "").toLowerCase();
-      const aliasVendor = accountVendors.find(v =>
-        v.aliases && v.aliases.some(a => desc.includes(a.toLowerCase()))
-      );
-      if (aliasVendor) {
-        const liveVendor = (liveVendors || sheetVendors) ? (liveVendors || sheetVendors).find(v => v.name.toLowerCase() === aliasVendor.name.toLowerCase()) : null;
-        const expectedAmt = liveVendor?.expectedAmount ?? aliasVendor?.expectedAmount;
-        const discrepancies = [];
-        if (expectedAmt && !aliasVendor?.optional && Math.abs(tx.amount - expectedAmt) > 0.50) {
-          discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(tx.amount)}`);
-        }
-        matched.push({ ...tx, vendorMatch: aliasVendor.name, vendor: aliasVendor, discrepancies, notes: [] });
-        matchedNames.add(aliasVendor.name);
-      } else {
-        stillUnmatched.push(tx);
-      }
-    }
-    unmatched.length = 0;
-    unmatched.push(...stillUnmatched);
 
-    // Special case: Pittman — reassign multiple matches correctly
-    // If 1 match: assign to Benson. If 2 matches: higher = Benson, lower = Plaisance.
-    const pittmanMatches = matched.filter(m => m.vendorMatch && m.vendorMatch.toLowerCase().includes("pittman"));
-    const nonPittman = matched.filter(m => !m.vendorMatch || !m.vendorMatch.toLowerCase().includes("pittman"));
-    if (pittmanMatches.length === 1) {
-      pittmanMatches[0] = { ...pittmanMatches[0], vendorMatch: "Pittman - Benson" };
-    } else if (pittmanMatches.length >= 2) {
-      const sorted = [...pittmanMatches].sort((a, b) => b.amount - a.amount);
-      sorted[0] = { ...sorted[0], vendorMatch: "Pittman - Benson" };
-      sorted[1] = { ...sorted[1], vendorMatch: "Pittman - Plaisance" };
-      pittmanMatches.length = 0;
-      pittmanMatches.push(...sorted.slice(0, 2));
+    // Pittman: 1 charge = Benson, 2 charges = higher is Benson, lower is Plaisance
+    const pittman = matched.filter(m => m.vendorMatch && m.vendorMatch.includes("Pittman"));
+    const nonPittman = matched.filter(m => !m.vendorMatch || !m.vendorMatch.includes("Pittman"));
+    if (pittman.length === 1) {
+      pittman[0] = { ...pittman[0], vendorMatch: "Pittman - Benson" };
+    } else if (pittman.length >= 2) {
+      const s = [...pittman].sort((a, b) => b.amount - a.amount);
+      s[0] = { ...s[0], vendorMatch: "Pittman - Benson" };
+      s[1] = { ...s[1], vendorMatch: "Pittman - Plaisance" };
+      pittman.length = 0; pittman.push(...s.slice(0, 2));
     }
 
-    // Special case: Profitable PPOs — same description, assign by amount
-    // ~$97 = Membership, higher amount = Service
-    const ppoPittmanBase = [...nonPittman, ...pittmanMatches];
-    const ppoMatches = ppoPittmanBase.filter(m => m.vendorMatch && m.vendorMatch.toLowerCase().includes("profitable ppos"));
-    const nonPPO = ppoPittmanBase.filter(m => !m.vendorMatch || !m.vendorMatch.toLowerCase().includes("profitable ppos"));
-    // Reassign ALL PPO matches by amount — $97 = Membership, anything else = Service
-    const reassignedPPO = ppoMatches.map(m => {
-      if (Math.abs(m.amount - 97) < 10) {
-        return { ...m, vendorMatch: "Profitable PPOs Membership" };
+    // Profitable PPOs: ~$97 = Membership, anything else = Service
+    const allAfterPittman = [...nonPittman, ...pittman];
+    const ppo = allAfterPittman.filter(m => m.vendorMatch && m.vendorMatch.includes("Profitable PPOs"));
+    const nonPPO = allAfterPittman.filter(m => !m.vendorMatch || !m.vendorMatch.includes("Profitable PPOs"));
+    const reassignedPPO = ppo.map(m => {
+      const name = Math.abs(m.amount - 97) < 10 ? "Profitable PPOs Membership" : "Profitable PPOs Service";
+      const vendor = accountVendors.find(v => v.name === name);
+      const liveV = activeLive ? activeLive.find(v => v.name.toLowerCase() === name.toLowerCase()) : null;
+      const expectedAmt = liveV?.expectedAmount ?? vendor?.expectedAmount;
+      const discrepancies = [];
+      if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
+        discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
       }
-      return { ...m, vendorMatch: "Profitable PPOs Service" };
+      return { ...m, vendorMatch: name, vendor, discrepancies };
     });
-    ppoMatches.length = 0;
-    ppoMatches.push(...reassignedPPO);
-    const finalMatched = [...nonPPO, ...ppoMatches];
+
+    const finalMatched = [...nonPPO, ...reassignedPPO];
     const finalMatchedNames = new Set(finalMatched.map(m => m.vendorMatch).filter(Boolean));
 
-    const activeLiveVendors = liveVendors || sheetVendors;
     const miss = accountVendors.filter(v => {
       if (finalMatchedNames.has(v.name) || matchedNames.has(v.name)) return false;
       if (v.optional) return false;
-      const liveV = activeLiveVendors ? activeLiveVendors.find(s => s.name.toLowerCase() === v.name.toLowerCase()) : null;
+      const liveV = activeLive ? activeLive.find(s => s.name.toLowerCase() === v.name.toLowerCase()) : null;
       const amt = liveV?.expectedAmount ?? v.expectedAmount;
       return amt != null;
     });
+
     setMatches(finalMatched);
     setUnmatched(unmatched);
     setMissing(miss);
