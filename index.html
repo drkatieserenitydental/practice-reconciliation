@@ -810,7 +810,7 @@ function App() {
                 {sheetStatus === "loading" && <Msg color="#c9b97a">Writing to Google Sheets…</Msg>}
                 {sheetStatus === "success" && (
                   <div>
-                    <Msg color="#4a7c59">✅ {account} sheet updated!</Msg>
+                    <Msg color="#4a7c59">✅ Monthly sheet updated!</Msg>
                     <div style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
 
                       <button onClick={() => setStep("email")} style={B("#4a7c59", "#fff")}>
