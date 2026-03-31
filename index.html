@@ -463,16 +463,22 @@ function App() {
     }
 
     // Special case: Profitable PPOs — same description, assign by amount
-    // $97 = Membership, higher amount = Service
+    // ~$97 = Membership, higher amount = Service
     const ppoPittmanBase = [...nonPittman, ...pittmanMatches];
     const ppoMatches = ppoPittmanBase.filter(m => m.vendorMatch && m.vendorMatch.toLowerCase().includes("profitable ppos"));
     const nonPPO = ppoPittmanBase.filter(m => !m.vendorMatch || !m.vendorMatch.toLowerCase().includes("profitable ppos"));
     if (ppoMatches.length >= 2) {
-      const sorted = [...ppoMatches].sort((a, b) => b.amount - a.amount);
-      sorted[0] = { ...sorted[0], vendorMatch: "Profitable PPOs Service" };
-      sorted[sorted.length - 1] = { ...sorted[sorted.length - 1], vendorMatch: "Profitable PPOs Membership" };
+      const sortedPPO = [...ppoMatches].sort((a, b) => b.amount - a.amount);
+      const reassigned = sortedPPO.map((m, i) => {
+        if (i === sortedPPO.length - 1 && Math.abs(m.amount - 97) < 10) {
+          return { ...m, vendorMatch: "Profitable PPOs Membership" };
+        }
+        return { ...m, vendorMatch: "Profitable PPOs Service" };
+      });
+      ppoMatches.length = 0;
+      ppoMatches.push(...reassigned);
     } else if (ppoMatches.length === 1) {
-      ppoMatches[0] = Math.abs(ppoMatches[0].amount - 97) < 5
+      ppoMatches[0] = Math.abs(ppoMatches[0].amount - 97) < 10
         ? { ...ppoMatches[0], vendorMatch: "Profitable PPOs Membership" }
         : { ...ppoMatches[0], vendorMatch: "Profitable PPOs Service" };
     }
