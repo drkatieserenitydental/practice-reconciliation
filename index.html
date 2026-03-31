@@ -363,6 +363,8 @@ function App() {
       const start = raw.indexOf("[");
       const end = raw.lastIndexOf("]");
       if (start === -1 || end === -1) throw new Error("No JSON array in response: " + raw.substring(0, 200));
+      const parsed = JSON.parse(raw.substring(start, end + 1));
+      reconcile(parsed, sheetVendors);
       setStep("review");
     } catch (e) {
       setError("Failed to parse statement: " + e.message);
