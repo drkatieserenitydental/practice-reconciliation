@@ -48,8 +48,8 @@ const VENDORS = [
   { name: "Chat GPT",                        expectedAmount: 20.00,   chargeDay: 5,    method: "Amex" },
   { name: "Profitable PPOs Service",         expectedAmount: 1825.00, chargeDay: 5,    method: "Amex" },
   { name: "Profitable PPOs Membership",       expectedAmount: 97.00,   chargeDay: 5,    method: "Amex" },
-  { name: "Eagle Soft Patterson",            expectedAmount: null,    chargeDay: 11,   method: "Amex" },
   { name: "Eagle Soft Vyne",                 expectedAmount: 129.00,  chargeDay: 11,   method: "Amex", optional: true },
+  { name: "Eagle Soft Patterson",            expectedAmount: null,    chargeDay: null, method: "Amex", optional: true },
   { name: "Extra Space Storage",             expectedAmount: null,    chargeDay: 11,   method: "Amex" },
   { name: "Sly Broadcast",                   expectedAmount: 8.00,    chargeDay: 12,   method: "Amex" },
   { name: "Optima",                          expectedAmount: 79.00,   chargeDay: 15,   method: "Amex" },
@@ -378,7 +378,7 @@ function App() {
     // Pre-filter: clear any match on transactions we know should be unrecognized
     txns = txns.map(tx => {
       const desc = (tx.description || "").toLowerCase();
-      if (desc.includes("spectrumatkillia") || desc.includes("spectrum at killia") || desc.includes("patterson")) {
+      if (desc.includes("spectrumatkillia") || desc.includes("spectrum at killia") || desc.includes("patterson") || desc.includes("eaglesoft") || desc.includes("eagle soft")) {
         return { ...tx, vendorMatch: null, matchConfidence: "none" };
       }
       return tx;
