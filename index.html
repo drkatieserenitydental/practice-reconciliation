@@ -375,11 +375,10 @@ function App() {
       v.aliases.map(alias => ({ alias: alias.toLowerCase(), name: v.name }))
     );
 
-    // Pre-filter: clear any match on transactions we know are labs (not tracked)
-    // Only exclude Spectrum Killian transactions — identified by "spectrumatkillia" specifically
+    // Pre-filter: clear any match on transactions we know should be unrecognized
     txns = txns.map(tx => {
       const desc = (tx.description || "").toLowerCase();
-      if (desc.includes("spectrumatkillia") || desc.includes("spectrum at killia")) {
+      if (desc.includes("spectrumatkillia") || desc.includes("spectrum at killia") || desc.includes("patterson")) {
         return { ...tx, vendorMatch: null, matchConfidence: "none" };
       }
       return tx;
