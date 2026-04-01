@@ -39,8 +39,6 @@ const VENDORS = [
   { name: "Rent",                            expectedAmount: 7824.34, chargeDay: 21,   method: "BoA", aliases: ["Perimeter Sarbi", "PERIMETER SARBI", "perimeter sarbi"] },
   { name: "Business Disability (Principal)", expectedAmount: 127.31,  chargeDay: 24,   method: "BoA", aliases: ["principal disability", "business disability principal"] },
   { name: "Dr. Benson Loan",                expectedAmount: 1889.41, chargeDay: 30,   method: "BoA", aliases: ["BDG", "bdg", "benson loan", "Payments and Invoicing payment to BDG"] },
-  { name: "Spectrum Killian - Benson",       expectedAmount: null,    chargeDay: 15,   method: "BoA", aliases: ["spectrum killian benson", "spectrum benson"] },
-  { name: "Spectrum Killian - Plaisance",    expectedAmount: null,    chargeDay: 15,   method: "BoA", aliases: ["spectrum killian plaisance", "spectrum plaisance", "perimeter sarbi plaisance"] },
   { name: "Carter Dental Solutions",         expectedAmount: 1050.00, chargeDay: 1,    method: "Amex" },
   { name: "Google Business Benson",          expectedAmount: null,    chargeDay: 1,    method: "Amex" },
   { name: "Google Business Serenity",        expectedAmount: null,    chargeDay: 1,    method: "Amex" },
@@ -64,10 +62,7 @@ const VENDORS = [
   { name: "NexAir (Rental)",                 expectedAmount: null,    chargeDay: 31,   method: "Amex" },
   { name: "NexAir Fill",                     expectedAmount: null,    chargeDay: null, method: "Amex" },
   { name: "Netflix",                         expectedAmount: 17.99,   chargeDay: 30,   method: "Amex" },
-  { name: "Glidewell",                       expectedAmount: null,    chargeDay: 22,   method: "Amex" },
   { name: "Quench",                          expectedAmount: null,    chargeDay: 1,    method: "Amex" },
-  { name: "Pittman - Benson",                expectedAmount: null,    chargeDay: 10,   method: "Amex" },
-  { name: "Pittman - Plaisance",             expectedAmount: null,    chargeDay: 10,   method: "Amex" },
 ];
 
 async function extractTextFromPDF(file, startPage = 1) {
@@ -421,20 +416,8 @@ function App() {
       }
     }
 
-    // Pittman: 1 charge = Benson, 2 charges = higher is Benson, lower is Plaisance
-    const pittman = matched.filter(m => m.vendorMatch && m.vendorMatch.includes("Pittman"));
-    const nonPittman = matched.filter(m => !m.vendorMatch || !m.vendorMatch.includes("Pittman"));
-    if (pittman.length === 1) {
-      pittman[0] = { ...pittman[0], vendorMatch: "Pittman - Benson" };
-    } else if (pittman.length >= 2) {
-      const s = [...pittman].sort((a, b) => b.amount - a.amount);
-      s[0] = { ...s[0], vendorMatch: "Pittman - Benson" };
-      s[1] = { ...s[1], vendorMatch: "Pittman - Plaisance" };
-      pittman.length = 0; pittman.push(...s.slice(0, 2));
-    }
-
     // Profitable PPOs: ~$97 = Membership, anything else = Service
-    const allAfterPittman = [...nonPittman, ...pittman];
+    const allAfterPittman = [...matched];
     const ppo = allAfterPittman.filter(m => m.vendorMatch && m.vendorMatch.includes("Profitable PPOs"));
     const nonPPO = allAfterPittman.filter(m => !m.vendorMatch || !m.vendorMatch.includes("Profitable PPOs"));
     const reassignedPPO = ppo.map(m => {
