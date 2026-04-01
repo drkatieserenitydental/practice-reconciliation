@@ -45,7 +45,6 @@ const VENDORS = [
   { name: "Dental Growth Solutions",         expectedAmount: 345.48,  chargeDay: 17,   method: "Amex" },
   { name: "Revenue Well",                    expectedAmount: 793.58,  chargeDay: 1,    method: "Amex" },
   { name: "Cloud",                           expectedAmount: 117.00,  chargeDay: 2,    method: "Amex" },
-  { name: "Scribe",                          expectedAmount: 28.00,   chargeDay: 4,    method: "Amex" },
   { name: "Chat GPT",                        expectedAmount: 20.00,   chargeDay: 5,    method: "Amex" },
   { name: "Profitable PPOs Service",         expectedAmount: 1825.00, chargeDay: 5,    method: "Amex" },
   { name: "Profitable PPOs Membership",       expectedAmount: 97.00,   chargeDay: 5,    method: "Amex" },
@@ -59,8 +58,8 @@ const VENDORS = [
   { name: "Comcast Business",                expectedAmount: 359.38,  chargeDay: 25,   method: "Amex" },
   { name: "Spotify",                         expectedAmount: 19.99,   chargeDay: 25,   method: "Amex" },
   { name: "Dexis Complete",                  expectedAmount: 258.00,  chargeDay: 25,   method: "Amex", optional: true },
-  { name: "NexAir (Rental)",                 expectedAmount: null,    chargeDay: 31,   method: "Amex" },
-  { name: "NexAir Fill",                     expectedAmount: null,    chargeDay: null, method: "Amex" },
+  { name: "NexAir (Rental)",                 expectedAmount: 76.26,   chargeDay: 31,   method: "BoA", aliases: ["nexair llc", "nexair"] },
+  { name: "NexAir Fill",                     expectedAmount: null,    chargeDay: null, method: "BoA", aliases: ["nexair llc", "nexair"] },
   { name: "Netflix",                         expectedAmount: 17.99,   chargeDay: 30,   method: "Amex" },
   { name: "Quench",                          expectedAmount: null,    chargeDay: 1,    method: "Amex" },
 ];
@@ -377,10 +376,10 @@ function App() {
     );
 
     // Pre-filter: clear any match on transactions we know are labs (not tracked)
-    const labKeywords = ["spectrumatkillia", "spectrum at killia", "benson dental group", "pittman"];
+    // Only exclude Spectrum Killian transactions — identified by "spectrumatkillia" specifically
     txns = txns.map(tx => {
       const desc = (tx.description || "").toLowerCase();
-      if (labKeywords.some(k => desc.includes(k))) {
+      if (desc.includes("spectrumatkillia") || desc.includes("spectrum at killia")) {
         return { ...tx, vendorMatch: null, matchConfidence: "none" };
       }
       return tx;
@@ -426,8 +425,18 @@ function App() {
       }
     }
 
+    // NexAir: ~$70-80 = Rental, anything else = Fill
+    const nexairMatches = matched.filter(m => m.vendorMatch && m.vendorMatch.toLowerCase().includes("nexair"));
+    const nonNexAir = matched.filter(m => !m.vendorMatch || !m.vendorMatch.toLowerCase().includes("nexair"));
+    const reassignedNexAir = nexairMatches.map(m => {
+      const name = (m.amount >= 65 && m.amount <= 85) ? "NexAir (Rental)" : "NexAir Fill";
+      const vendor = accountVendors.find(v => v.name === name);
+      return { ...m, vendorMatch: name, vendor };
+    });
+    const matchedAfterNexAir = [...nonNexAir, ...reassignedNexAir];
+
     // Profitable PPOs: ~$97 = Membership, anything else = Service
-    const allAfterPittman = [...matched];
+    const allAfterPittman = [...matchedAfterNexAir];
     const ppo = allAfterPittman.filter(m => m.vendorMatch && m.vendorMatch.includes("Profitable PPOs"));
     const nonPPO = allAfterPittman.filter(m => !m.vendorMatch || !m.vendorMatch.includes("Profitable PPOs"));
     const reassignedPPO = ppo.map(m => {
