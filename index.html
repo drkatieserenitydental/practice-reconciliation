@@ -38,7 +38,7 @@ const VENDORS = [
   { name: "Practice Loan (Bank of America)", expectedAmount: 8117.39, chargeDay: 21,   method: "BoA", aliases: ["practice loan", "boa practice"] },
   { name: "Rent",                            expectedAmount: 7824.34, chargeDay: 21,   method: "BoA", aliases: ["Perimeter Sarbi", "PERIMETER SARBI", "perimeter sarbi"] },
   { name: "Business Disability (Principal)", expectedAmount: 127.31,  chargeDay: 24,   method: "BoA", aliases: ["principal disability", "business disability principal"] },
-  { name: "Dr. Benson Loan",                expectedAmount: 1889.41, chargeDay: 30,   method: "BoA", aliases: ["BDG", "bdg", "benson loan", "Payments and Invoicing payment to BDG"] },
+  { name: "Dr. Benson Loan",                expectedAmount: 1889.41, chargeDay: 30,   method: "BoA", aliases: ["BDG", "bdg", "Payments and Invoicing payment to BDG"] },
   { name: "Carter Dental Solutions",         expectedAmount: 1050.00, chargeDay: 1,    method: "Amex" },
   { name: "Google Business Benson",          expectedAmount: null,    chargeDay: 1,    method: "Amex" },
   { name: "Google Business Serenity",        expectedAmount: null,    chargeDay: 1,    method: "Amex" },
@@ -375,6 +375,16 @@ function App() {
     const aliasMap = VENDORS.filter(v => v.aliases).flatMap(v =>
       v.aliases.map(alias => ({ alias: alias.toLowerCase(), name: v.name }))
     );
+
+    // Pre-filter: clear any match on transactions we know are labs (not tracked)
+    const labKeywords = ["spectrumatkillia", "spectrum at killia", "benson dental group", "pittman"];
+    txns = txns.map(tx => {
+      const desc = (tx.description || "").toLowerCase();
+      if (labKeywords.some(k => desc.includes(k))) {
+        return { ...tx, vendorMatch: null, matchConfidence: "none" };
+      }
+      return tx;
+    });
 
     // Force alias matches on every transaction (overrides AI)
     txns = txns.map(tx => {
