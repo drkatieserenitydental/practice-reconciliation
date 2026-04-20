@@ -131,7 +131,8 @@ function App() {
   const [gmailStatus, setGmailStatus] = useState(null);
   const [emailCopied, setEmailCopied] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [sheetVendors, setSheetVendors] = useState(null); // {name, expectedAmount} from live sheet
+  const [sheetVendors, setSheetVendors] = useState(null);
+  const [pattersonSheetData, setPattersonSheetData] = useState(null); // {name, expectedAmount} from live sheet
   const [boaResults, setBoaResults] = useState(null);
   const [boaAccessToken, setBoaAccessToken] = useState(null);
   const [amexAccessToken, setAmexAccessToken] = useState(null);
@@ -159,8 +160,38 @@ function App() {
               expectedAmount: row[7] ? parseFloat(row[7].toString().replace(/[$,]/g, "")) || null : null,
             })).filter(v => v.name);
             setSheetVendors(vendors);
-            // Re-reconcile with live expected amounts
             reReconcile(vendors);
+
+            // Load Patterson data — rows 16 (EagleSoft), 17 (Vyne Software), 18 (Vyne Extra)
+            try {
+              const monthIdx = MONTH_LABELS.indexOf(month);
+              const amountColIdx = 10 + monthIdx * 2;
+              const col = (i) => i < 26 ? String.fromCharCode(65 + i) : "A" + String.fromCharCode(65 + i - 26);
+              const pRange = `H16:${col(amountColIdx)}18`;
+              const pRes = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${pRange}`,
+                { headers: { "Authorization": `Bearer ${r.access_token}` } }
+              );
+              const pJson = await pRes.json();
+              if (!pJson.error && pJson.values) {
+                const rows = pJson.values;
+                const getVal = (row, col) => {
+                  const v = row?.[col];
+                  return v ? parseFloat(v.toString().replace(/[$,]/g, "")) || null : null;
+                };
+                // Each row: [H (expected), ..., last col (actual for current month)]
+                const lastCol = (r) => r?.[r.length - 1];
+                setPattersonSheetData({
+                  eaglesoftExpected: getVal(rows[0], 0),
+                  eaglesoftActual: parseFloat((lastCol(rows[0]) || "").toString().replace(/[$,]/g, "")) || null,
+                  vyneExpected: getVal(rows[1], 0),
+                  vyneActual: parseFloat((lastCol(rows[1]) || "").toString().replace(/[$,]/g, "")) || null,
+                  vyneExtraActual: parseFloat((lastCol(rows[2]) || "").toString().replace(/[$,]/g, "")) || null,
+                });
+              }
+            } catch(e) {
+              console.warn("Could not load Patterson sheet data:", e);
+            }
           }
         } catch(e) {
           console.warn("Could not load sheet vendors:", e);
@@ -573,12 +604,36 @@ function App() {
   function buildEmail() {
     const all = [...(boaResults?.matches || []), ...(amexResults?.matches || [])];
     const total = all.filter(m => m.discrepancies.length === 0).reduce((s, m) => s + m.amount, 0);
+
+    // Build Patterson section from sheet data
+    const pattersonLines = [];
+    if (pattersonSheetData) {
+      pattersonLines.push("", "━━━━ PATTERSON ━━━━", "");
+      const { eaglesoftActual, eaglesoftExpected, vyneActual, vyneExpected } = pattersonSheetData;
+      const threshold = 5.00; // flag if > $5 difference
+
+      if (eaglesoftActual !== null) {
+        const diff = eaglesoftExpected ? Math.abs(eaglesoftActual - eaglesoftExpected) : 0;
+        const flag = eaglesoftExpected && diff > threshold ? ` ⚠️ Expected ${fmt(eaglesoftExpected)}` : "";
+        pattersonLines.push(`  Patterson EagleSoft         ${fmt(eaglesoftActual).padStart(12)}${flag}`);
+      }
+      if (vyneActual !== null) {
+        const diff = vyneExpected ? Math.abs(vyneActual - vyneExpected) : 0;
+        const flag = vyneExpected && diff > threshold ? ` ⚠️ Expected ${fmt(vyneExpected)}` : "";
+        pattersonLines.push(`  Patterson Vyne Software      ${fmt(vyneActual).padStart(12)}${flag}`);
+      }
+      if (pattersonSheetData.vyneExtraActual !== null) {
+        pattersonLines.push(`  Patterson Vyne Extra         ${fmt(pattersonSheetData.vyneExtraActual).padStart(12)}  (variable)`);
+      }
+    }
+
     return [
       `RECONCILIATION SUMMARY — ${month}`,
       `Generated: ${new Date().toLocaleDateString()}`,
       `Total Confirmed: ${fmt(total)}`,
       ...buildSection("BANK OF AMERICA", boaResults),
       ...buildSection("AMERICAN EXPRESS", amexResults),
+      ...pattersonLines,
     ].join("\n");
   }
 
