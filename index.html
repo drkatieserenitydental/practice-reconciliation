@@ -46,7 +46,7 @@ const VENDORS = [
   { name: "Revenue Well",                    expectedAmount: 793.58,  chargeDay: 1,    method: "Amex" },
   { name: "Cloud",                           expectedAmount: 117.00,  chargeDay: 2,    method: "Amex" },
   { name: "Chat GPT",                        expectedAmount: 20.00,   chargeDay: 5,    method: "Amex" },
-  { name: "Profitable PPOs Service",         expectedAmount: 1825.00, chargeDay: 5,    method: "Amex" },
+  { name: "Profitable PPOs Service",         expectedAmount: 697.00,  chargeDay: 5,    method: "Amex" },
   { name: "Profitable PPOs Membership",       expectedAmount: 97.00,   chargeDay: 5,    method: "Amex" },
   { name: "Eagle Soft Vyne",                 expectedAmount: 129.00,  chargeDay: 11,   method: "Amex", optional: true },
   { name: "Eagle Soft Patterson",            expectedAmount: null,    chargeDay: null, method: "Amex", optional: true },
@@ -465,20 +465,33 @@ function App() {
     });
     const matchedAfterNexAir = [...nonNexAir, ...reassignedNexAir];
 
-    // Profitable PPOs: ~$97 = Membership, anything else = Service
+    // Profitable PPOs: split combined $794 charge ($697 service + $97 membership) into two sheet entries
     const allAfterPittman = [...matchedAfterNexAir];
     const ppo = allAfterPittman.filter(m => m.vendorMatch && m.vendorMatch.includes("Profitable PPOs"));
     const nonPPO = allAfterPittman.filter(m => !m.vendorMatch || !m.vendorMatch.includes("Profitable PPOs"));
-    const reassignedPPO = ppo.map(m => {
-      const name = Math.abs(m.amount - 97) < 10 ? "Profitable PPOs Membership" : "Profitable PPOs Service";
-      const vendor = accountVendors.find(v => v.name === name);
-      const liveV = activeLive ? activeLive.find(v => v.name.toLowerCase() === name.toLowerCase()) : null;
-      const expectedAmt = liveV?.expectedAmount ?? vendor?.expectedAmount;
-      const discrepancies = [];
-      if (expectedAmt && Math.abs(m.amount - expectedAmt) > 0.50) {
-        discrepancies.push(`Expected ${fmt(expectedAmt)}, charged ${fmt(m.amount)}`);
+    const reassignedPPO = [];
+
+    ppo.forEach(m => {
+      const combinedAmount = 697 + 97; // $794
+      const isCombined = Math.abs(m.amount - combinedAmount) < 10;
+
+      if (isCombined) {
+        // Split into two separate entries for the sheet
+        const serviceVendor = accountVendors.find(v => v.name === "Profitable PPOs Service");
+        const membershipVendor = accountVendors.find(v => v.name === "Profitable PPOs Membership");
+        const serviceLive = activeLive ? activeLive.find(v => v.name.toLowerCase() === "profitable ppos service") : null;
+        const membershipLive = activeLive ? activeLive.find(v => v.name.toLowerCase() === "profitable ppos membership") : null;
+        const serviceExpected = serviceLive?.expectedAmount ?? serviceVendor?.expectedAmount ?? 697;
+        const membershipExpected = membershipLive?.expectedAmount ?? membershipVendor?.expectedAmount ?? 97;
+        reassignedPPO.push({ ...m, amount: 697, vendorMatch: "Profitable PPOs Service", vendor: serviceVendor, discrepancies: Math.abs(697 - serviceExpected) > 0.50 ? [`Expected ${fmt(serviceExpected)}, charged ${fmt(697)}`] : [], notes: ["Split from combined charge"] });
+        reassignedPPO.push({ ...m, amount: 97, vendorMatch: "Profitable PPOs Membership", vendor: membershipVendor, discrepancies: Math.abs(97 - membershipExpected) > 0.50 ? [`Expected ${fmt(membershipExpected)}, charged ${fmt(97)}`] : [], notes: ["Split from combined charge"] });
+      } else if (Math.abs(m.amount - 97) < 10) {
+        const vendor = accountVendors.find(v => v.name === "Profitable PPOs Membership");
+        reassignedPPO.push({ ...m, vendorMatch: "Profitable PPOs Membership", vendor, discrepancies: [], notes: [] });
+      } else {
+        const vendor = accountVendors.find(v => v.name === "Profitable PPOs Service");
+        reassignedPPO.push({ ...m, vendorMatch: "Profitable PPOs Service", vendor, discrepancies: [], notes: [] });
       }
-      return { ...m, vendorMatch: name, vendor, discrepancies };
     });
 
     const finalMatched = [...nonPPO, ...reassignedPPO];
