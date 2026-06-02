@@ -18,10 +18,21 @@ module.exports = async (req, res) => {
 
   try {
     const { access_token, start_date, end_date } = req.body;
+
+    // Force a fresh sync from the bank before fetching
+    try {
+      await client.transactionsRefresh({ access_token });
+      // Wait a moment for refresh to process
+      await new Promise(r => setTimeout(r, 3000));
+    } catch (refreshErr) {
+      console.log("Refresh skipped:", refreshErr.message);
+    }
+
     const response = await client.transactionsGet({
       access_token,
       start_date,
       end_date,
+      options: { count: 500 }
     });
     res.json({ transactions: response.data.transactions });
   } catch (e) {
