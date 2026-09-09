@@ -10,6 +10,14 @@ const client = new PlaidApi(new Configuration({
   },
 }));
 
+async function kvGet(key) {
+  const res = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/get/${key}`, {
+    headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }
+  });
+  const data = await res.json();
+  return data.result || null;
+}
+
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -17,12 +25,19 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    const { access_token, start_date, end_date } = req.body;
+    let { access_token, account_name, start_date, end_date } = req.body;
 
-    // Force a fresh sync from the bank before fetching
+    // If no access_token provided, try to load from KV
+    if (!access_token && account_name) {
+      access_token = await kvGet(`plaid_token_${account_name}`);
+      if (!access_token) {
+        return res.status(400).json({ error: "No stored token found. Please reconnect via Plaid." });
+      }
+    }
+
+    // Force a fresh sync from the bank
     try {
       await client.transactionsRefresh({ access_token });
-      // Wait a moment for refresh to process
       await new Promise(r => setTimeout(r, 3000));
     } catch (refreshErr) {
       console.log("Refresh skipped:", refreshErr.message);
