@@ -1,6 +1,4 @@
 const { Configuration, PlaidApi, PlaidEnvironments } = require("plaid");
-const fs = require("fs");
-const path = require("path");
 
 const client = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "production"],
@@ -12,6 +10,13 @@ const client = new PlaidApi(new Configuration({
   },
 }));
 
+async function kvSet(key, value) {
+  const res = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/set/${key}/${encodeURIComponent(value)}`, {
+    headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }
+  });
+  return res.json();
+}
+
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -22,10 +27,12 @@ module.exports = async (req, res) => {
     const { public_token, account_name } = req.body;
     const response = await client.itemPublicTokenExchange({ public_token });
     const access_token = response.data.access_token;
-    
-    // Store in environment (in production, store in a database)
-    // For now return it to be stored by the client
-    res.json({ access_token, account_name });
+
+    // Persist token in Upstash KV keyed by account name
+    await kvSet(`plaid_token_${account_name}`, access_token);
+    console.log(`Saved token for ${account_name}`);
+
+    res.json({ success: true, account_name });
   } catch (e) {
     console.error(e.response?.data || e.message);
     res.status(500).json({ error: e.response?.data?.error_message || e.message });
