@@ -137,6 +137,27 @@ function App() {
   const [boaAccessToken, setBoaAccessToken] = useState(null);
   const [amexAccessToken, setAmexAccessToken] = useState(null);
   const [plaidConnecting, setPlaidConnecting] = useState(false);
+  const [tokensLoaded, setTokensLoaded] = useState(false);
+
+  // On first load, check if tokens are already stored in KV
+  React.useEffect(() => {
+    async function loadStoredTokens() {
+      try {
+        const [boaRes, amexRes] = await Promise.all([
+          fetch(`${VERCEL_URL}/api/get-token?account_name=BoA`),
+          fetch(`${VERCEL_URL}/api/get-token?account_name=Amex`)
+        ]);
+        const boaData = await boaRes.json();
+        const amexData = await amexRes.json();
+        if (boaData.access_token) setBoaAccessToken("stored");
+        if (amexData.access_token) setAmexAccessToken("stored");
+      } catch(e) {
+        console.warn("Could not load stored tokens:", e);
+      }
+      setTokensLoaded(true);
+    }
+    loadStoredTokens();
+  }, []);
   const [amexResults, setAmexResults] = useState(null);
 
   function signInWithGoogle() {
@@ -232,15 +253,16 @@ function App() {
         token: link_token,
         onSuccess: async (public_token, metadata) => {
           try {
-            // Exchange for access token
+            // Exchange for access token — backend saves it to KV storage
             const exchangeRes = await fetch(`${VERCEL_URL}/api/exchange-token`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ public_token, account_name: accountType })
             });
-            const { access_token } = await exchangeRes.json();
-            if (accountType === "BoA") setBoaAccessToken(access_token);
-            else setAmexAccessToken(access_token);
+            const result = await exchangeRes.json();
+            if (result.error) throw new Error(result.error);
+            if (accountType === "BoA") setBoaAccessToken("stored");
+            else setAmexAccessToken("stored");
             setPlaidConnecting(false);
           } catch (e) {
             setError("Failed to exchange token: " + e.message);
@@ -256,7 +278,7 @@ function App() {
     }
   }
 
-  async function fetchPlaidTransactions(accessToken) {
+  async function fetchPlaidTransactions() {
     setStep("parsing");
     setError(null);
     try {
@@ -270,7 +292,7 @@ function App() {
       const res = await fetch(`${VERCEL_URL}/api/get-transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: accessToken, start_date: startDate, end_date: endDate })
+        body: JSON.stringify({ account_name: account, start_date: startDate, end_date: endDate })
       });
       const { transactions, error } = await res.json();
       if (error) throw new Error(error);
@@ -774,7 +796,7 @@ function App() {
                 </button>
               )}
               {(account === "BoA" ? boaAccessToken : amexAccessToken) && (
-                <button onClick={() => fetchPlaidTransactions(account === "BoA" ? boaAccessToken : amexAccessToken)}
+                <button onClick={() => fetchPlaidTransactions()}
                   style={{ background: "#4a7c59", color: "#fff", border: "none", borderRadius: "4px", padding: "10px 20px", fontSize: "13px", cursor: "pointer", fontFamily: "Georgia, serif", fontStyle: "italic", whiteSpace: "nowrap" }}>
                   Fetch {month} Transactions →
                 </button>
